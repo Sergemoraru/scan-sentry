@@ -1,3 +1,4 @@
+#if false
 //
 //  QR_ScannerApp.swift
 //  QR Scanner
@@ -30,3 +31,5 @@ struct QR_ScannerApp: App {
         .modelContainer(sharedModelContainer)
     }
 }
+#endif
+

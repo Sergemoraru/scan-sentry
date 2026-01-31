@@ -1,0 +1,189 @@
+import SwiftUI
+import SwiftData
+import UIKit
+
+private enum DateFilter: String, CaseIterable, Identifiable {
+    case all, day, week, month
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: return "All Time"
+        case .day: return "Last 24 Hours"
+        case .week: return "Last 7 Days"
+        case .month: return "Last 30 Days"
+        }
+    }
+
+    var cutoffDate: Date? {
+        switch self {
+        case .all:
+            return nil
+        case .day:
+            return Calendar.current.date(byAdding: .day, value: -1, to: Date())
+        case .week:
+            return Calendar.current.date(byAdding: .day, value: -7, to: Date())
+        case .month:
+            return Calendar.current.date(byAdding: .day, value: -30, to: Date())
+        }
+    }
+}
+
+struct HistoryView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.openURL) private var openURL
+    @Query(sort: \ScanRecord.createdAt, order: .reverse) private var scans: [ScanRecord]
+    @State private var searchText = ""
+    @State private var selectedKindRaw: String? = nil
+    @State private var dateFilter: DateFilter = .all
+
+    @State private var showClearConfirm = false
+    @State private var showShare = false
+    @State private var shareText: String = ""
+
+    private var kindOptions: [String] {
+        Array(Set(scans.map { $0.kindRaw })).sorted()
+    }
+
+    var filtered: [ScanRecord] {
+        var result = scans
+
+        if let kind = selectedKindRaw, kindOptions.contains(kind) {
+            result = result.filter { $0.kindRaw == kind }
+        }
+
+        if let cutoff = dateFilter.cutoffDate {
+            result = result.filter { $0.createdAt >= cutoff }
+        }
+
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !query.isEmpty {
+            result = result.filter { $0.rawValue.localizedCaseInsensitiveContains(query) }
+        }
+
+        return result
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if filtered.isEmpty {
+                    ContentUnavailableView("No scans yet", systemImage: "clock")
+                } else {
+                    ForEach(filtered) { scan in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 6) {
+                                Text(scan.kindRaw.uppercased())
+                                if scan.isFavorite {
+                                    Image(systemName: "star.fill")
+                                        .foregroundStyle(.yellow)
+                                }
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                            Text(scan.rawValue)
+                                .lineLimit(2)
+                                .font(.body)
+
+                            Text(scan.createdAt, style: .date)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .swipeActions(edge: .trailing) {
+                            Button {
+                                UIPasteboard.general.string = scan.rawValue
+                            } label: {
+                                Label("Copy", systemImage: "doc.on.doc")
+                            }
+                            .tint(.blue)
+
+                            if let url = ScanParser.parse(scan.rawValue).normalizedURL {
+                                Button {
+                                    openURL(url)
+                                } label: {
+                                    Label("Open", systemImage: "safari")
+                                }
+                                .tint(.green)
+                            }
+
+                            Button {
+                                shareText = scan.rawValue
+                                showShare = true
+                            } label: {
+                                Label("Share", systemImage: "square.and.arrow.up")
+                            }
+                            .tint(.orange)
+                        }
+                        .swipeActions(edge: .leading) {
+                            Button {
+                                scan.isFavorite.toggle()
+                            } label: {
+                                Label(scan.isFavorite ? "Unfavorite" : "Favorite", systemImage: scan.isFavorite ? "star.slash" : "star")
+                            }
+                            .tint(.yellow)
+                        }
+                    }
+                    .onDelete { indexSet in
+                        for i in indexSet {
+                            modelContext.delete(filtered[i])
+                        }
+                    }
+                }
+            }
+            .navigationTitle("History")
+            .searchable(text: $searchText)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(role: .destructive) {
+                        showClearConfirm = true
+                    } label: {
+                        Label("Clear All", systemImage: "trash")
+                    }
+                    .disabled(scans.isEmpty)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    EditButton()
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Section("Kind") {
+                            Picker("Kind", selection: $selectedKindRaw) {
+                                Text("All").tag(nil as String?)
+                                ForEach(kindOptions, id: \.self) { kind in
+                                    Text(kind.uppercased()).tag(kind as String?)
+                                }
+                            }
+                        }
+                        Section("Date") {
+                            Picker("Date", selection: $dateFilter) {
+                                ForEach(DateFilter.allCases) { option in
+                                    Text(option.title).tag(option)
+                                }
+                            }
+                        }
+                    } label: {
+                        Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
+                    }
+                }
+            }
+            .confirmationDialog("Delete all history?", isPresented: $showClearConfirm, titleVisibility: .visible) {
+                Button("Delete All", role: .destructive) {
+                    for s in scans { modelContext.delete(s) }
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+            .sheet(isPresented: $showShare) {
+                ActivityView(activityItems: [shareText])
+            }
+        }
+    }
+}
+private struct ActivityView: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+    func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
+}
+
