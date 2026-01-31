@@ -42,11 +42,10 @@ struct ScanResultView: View {
         }
     }
 
-    @ViewBuilder
     private func urlSection(_ url: URL) -> some View {
         let report = URLRiskAnalyzer.analyze(url, raw: parsed.raw, aggressive: aggressive)
 
-        Section("URL preview") {
+        return Section("URL preview") {
             HStack {
                 Text("Host")
                 Spacer()

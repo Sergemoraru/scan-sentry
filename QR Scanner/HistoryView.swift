@@ -147,19 +147,15 @@ struct HistoryView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Section("Kind") {
-                            Picker("Kind", selection: $selectedKindRaw) {
-                                Text("All").tag(nil as String?)
-                                ForEach(kindOptions, id: \.self) { kind in
-                                    Text(kind.uppercased()).tag(kind as String?)
-                                }
+                        Picker("Kind", selection: $selectedKindRaw) {
+                            Text("All").tag(nil as String?)
+                            ForEach(kindOptions, id: \.self) { kind in
+                                Text(kind.uppercased()).tag(kind as String?)
                             }
                         }
-                        Section("Date") {
-                            Picker("Date", selection: $dateFilter) {
-                                ForEach(DateFilter.allCases) { option in
-                                    Text(option.title).tag(option)
-                                }
+                        Picker("Date", selection: $dateFilter) {
+                            ForEach(DateFilter.allCases) { option in
+                                Text(option.title).tag(option)
                             }
                         }
                     } label: {
