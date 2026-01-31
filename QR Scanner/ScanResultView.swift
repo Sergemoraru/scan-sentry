@@ -4,6 +4,7 @@ import UIKit
 struct ScanResultView: View {
     @Environment(\.openURL) private var openURL
     @State private var showConfirm = false
+    @AppStorage("aggressiveRiskAnalysis") private var aggressive = true
 
     let parsed: ParsedScan
     let confirmBeforeOpen: Bool
@@ -43,7 +44,7 @@ struct ScanResultView: View {
 
     @ViewBuilder
     private func urlSection(_ url: URL) -> some View {
-        let report = URLRiskAnalyzer.analyze(url, raw: parsed.raw)
+        let report = URLRiskAnalyzer.analyze(url, raw: parsed.raw, aggressive: aggressive)
 
         Section("URL preview") {
             HStack {
@@ -71,8 +72,12 @@ struct ScanResultView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Flags")
                     ForEach(report.flags, id: \.self) { flag in
+                        let isHigh = flag == "Punycode domain (possible look‑alike)" ||
+                                     flag == "IP address host" ||
+                                     flag == "Path traversal sequences" ||
+                                     flag.hasPrefix("Suspicious file type")
                         Text("• \(flag)")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(isHigh ? .red : .secondary)
                     }
                 }
             }

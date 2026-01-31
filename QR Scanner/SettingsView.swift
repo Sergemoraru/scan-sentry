@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @AppStorage("saveToHistory") private var saveToHistory: Bool = true
     @AppStorage("confirmBeforeOpen") private var confirmBeforeOpen: Bool = true
+    @AppStorage("aggressiveRiskAnalysis") private var aggressiveRiskAnalysis: Bool = true
 
     var body: some View {
         NavigationStack {
@@ -10,6 +11,9 @@ struct SettingsView: View {
                 Section("Preferences") {
                     Toggle("Save scans to History", isOn: $saveToHistory)
                     Toggle("Confirm before opening links", isOn: $confirmBeforeOpen)
+                    Toggle("Aggressive risk analysis", isOn: $aggressiveRiskAnalysis)
+                } footer: {
+                    Text("Aggressive mode applies extra heuristics (suspicious TLDs, file types, path tricks, encoding, keywords) to highlight potentially risky links.")
                 }
 
                 Section("About") {

@@ -82,7 +82,7 @@ struct URLRiskAnalyzer {
         "bit.ly", "t.co", "tinyurl.com", "goo.gl", "is.gd", "buff.ly", "ow.ly", "rebrand.ly"
     ]
 
-    static func analyze(_ url: URL, raw: String) -> URLRiskReport {
+    static func analyze(_ url: URL, raw: String, aggressive: Bool = true) -> URLRiskReport {
         var flags: [String] = []
 
         let scheme = (url.scheme ?? "").lowercased()
@@ -110,35 +110,79 @@ struct URLRiskAnalyzer {
             flags.append("Very long URL")
         }
 
-        // Non-standard port
-        if let port = url.port, port != 443 {
-            flags.append("Non-standard port :\(port)")
-        }
+        if aggressive {
+            // Non-standard port
+            if let port = url.port, port != 443 {
+                flags.append("Non-standard port :\(port)")
+            }
 
-        // Suspicious TLDs
-        let suspiciousTLDs: Set<String> = ["zip", "mov", "gq", "tk", "ml", "cf"]
-        if let hostTLD = host.split(separator: ".").last.map(String.init), suspiciousTLDs.contains(hostTLD) {
-            flags.append("Suspicious TLD (\(hostTLD))")
-        }
+            // Suspicious TLDs
+            let suspiciousTLDs: Set<String> = ["zip", "mov", "gq", "tk", "ml", "cf"]
+            if let hostTLD = host.split(separator: ".").last.map(String.init), suspiciousTLDs.contains(hostTLD) {
+                flags.append("Suspicious TLD (\(hostTLD))")
+            }
 
-        // Many subdomains
-        let subdomainCount = max(0, host.split(separator: ".").count - 2)
-        if subdomainCount >= 3 {
-            flags.append("Many subdomains")
-        }
+            // Many subdomains
+            let subdomainCount = max(0, host.split(separator: ".").count - 2)
+            if subdomainCount >= 3 {
+                flags.append("Many subdomains")
+            }
 
-        // Long path or query
-        if let path = url.path, path.count > 80 { flags.append("Long path") }
-        if let query = url.query, query.count > 120 { flags.append("Long query") }
+            // Long path or query
+            if url.path.count > 80 { flags.append("Long path") }
+            if let query = url.query, query.count > 120 { flags.append("Long query") }
 
-        // '@' in path or query (phishing technique)
-        if raw.contains("@") && !host.contains("@") {
-            flags.append("@ in path or query")
+            // '@' in path or query (phishing technique)
+            if raw.contains("@") && !host.contains("@") {
+                flags.append("@ in path or query")
+            }
+
+            // Suspicious file extension
+            let suspiciousExtensions: Set<String> = ["exe","apk","scr","bat","cmd","jar","dmg","pkg","appx","iso"]
+            let ext = url.pathExtension.lowercased()
+            if !ext.isEmpty && suspiciousExtensions.contains(ext) {
+                flags.append("Suspicious file type (.\(ext))")
+            }
+
+            // Path traversal sequences
+            let rawLower = raw.lowercased()
+            if rawLower.contains("../") || rawLower.contains("..%2f") || rawLower.contains("%2e%2e") {
+                flags.append("Path traversal sequences")
+            }
+
+            // Heavily percent-encoded
+            let percentCount = raw.filter { $0 == "%" }.count
+            if percentCount > 10 {
+                flags.append("Heavily percent-encoded")
+            }
+
+            // Non-ASCII characters
+            if raw.unicodeScalars.contains(where: { $0.value > 127 }) {
+                flags.append("Non-ASCII characters")
+            }
+
+            // Phishing keywords in host or path
+            let keywords: [String] = ["login","verify","account","update","secure","bank"]
+            let pathLower = url.path.lowercased()
+            if keywords.contains(where: { host.contains($0) || pathLower.contains($0) }) {
+                flags.append("Phishing keywords")
+            }
+
+            // Extremely long URL
+            if raw.count > 2048 {
+                flags.append("Extremely long URL")
+            }
         }
 
         let level: RiskLevel
-        // Small, opinionated scoring for MVP
-        if flags.contains("Punycode domain (possible look‑alike)") || flags.contains("IP address host") {
+        // Expanded scoring with additional high-risk triggers
+        let hasSuspiciousFileType = flags.contains(where: { $0.hasPrefix("Suspicious file type") })
+        let hasHighRisk = flags.contains("Punycode domain (possible look‑alike)") ||
+                          flags.contains("IP address host") ||
+                          flags.contains("Path traversal sequences") ||
+                          hasSuspiciousFileType
+
+        if hasHighRisk {
             level = .high
         } else if flags.count >= 2 {
             level = .medium

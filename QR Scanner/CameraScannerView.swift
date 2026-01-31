@@ -10,6 +10,10 @@ struct CameraScannerView: UIViewControllerRepresentable {
         var parent: CameraScannerView
         init(parent: CameraScannerView) { self.parent = parent }
     }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
 
     func makeUIViewController(context: Context) -> ScannerViewController {
         let vc = ScannerViewController()
