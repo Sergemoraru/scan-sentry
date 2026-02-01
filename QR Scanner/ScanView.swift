@@ -29,6 +29,9 @@ extension ParsedScan: Identifiable {
 }
 
 struct ScanView: View {
+    /// Space reserved at the bottom for the custom tab bar (and its offset),
+    /// so the scan window never sits behind it.
+    var bottomReserved: CGFloat = 0
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
     @AppStorage("saveToHistory") private var saveToHistory: Bool = true
@@ -63,7 +66,8 @@ struct ScanView: View {
                         let size = proxy.size
                         let safe = proxy.safeAreaInsets
                         let availableTop = safe.top + topBarHeight
-                        let availableBottom = safe.bottom + bottomBarHeight
+                        // Also reserve space for the custom bottom tab bar.
+                        let availableBottom = safe.bottom + bottomBarHeight + bottomReserved
 
                         let boxWidth = min(size.width * 0.8, 320.0)
                         let boxHeight = boxWidth

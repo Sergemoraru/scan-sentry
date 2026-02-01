@@ -141,6 +141,7 @@ struct HistoryView: View {
                 }
             }
             .navigationTitle("History")
+            .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
