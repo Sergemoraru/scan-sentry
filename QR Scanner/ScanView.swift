@@ -47,59 +47,50 @@ struct ScanView: View {
         NavigationStack {
             ZStack {
                 if cameraAuth == .authorized {
-                    CameraScannerView(isScanning: $isScanning, isTorchOn: $isTorchOn) { value, symbology in
-                        handleScan(value, symbology: symbology)
-                    }
-                    .ignoresSafeArea()
+                    VStack(spacing: 0) {
+                        // Top controls (outside camera area)
+                        topControls
 
-                    // Blurred mask around a clear scan window
-                    Color.clear
-                        .background(
+                        // Middle camera area with masked blur around a clear scan window
+                        GeometryReader { proxy in
+                            let size = proxy.size
+                            let boxWidth = min(size.width * 0.8, 320.0)
+                            let boxHeight = boxWidth
+                            let boxRect = CGRect(x: (size.width - boxWidth)/2,
+                                                 y: (size.height - boxHeight)/2,
+                                                 width: boxWidth,
+                                                 height: boxHeight)
+
                             ZStack {
-                                // Full-screen blur
-                                VisualEffectBlur()
-                                    .ignoresSafeArea()
-                                    .mask(
-                                        GeometryReader { proxy in
-                                            let size = proxy.size
-                                            let boxWidth = min(size.width * 0.8, 320)
-                                            let boxHeight = boxWidth
-                                            let boxRect = CGRect(x: (size.width - boxWidth)/2,
-                                                                 y: (size.height - boxHeight)/2,
-                                                                 width: boxWidth,
-                                                                 height: boxHeight)
+                                CameraScannerView(isScanning: $isScanning, isTorchOn: $isTorchOn) { value, symbology in
+                                    handleScan(value, symbology: symbology)
+                                }
 
-                                            Canvas { context, _ in
-                                                // Start with fully opaque mask (blur visible)
-                                                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.white))
-                                                // Cut a transparent hole for the scan box (camera clear)
-                                                let rounded = Path(roundedRect: boxRect, cornerRadius: 20)
-                                                context.blendMode = .destinationOut
-                                                context.fill(rounded, with: .color(.black))
-                                            }
+                                // Blur outside the scan window
+                                VisualEffectBlur()
+                                    .mask(
+                                        Canvas { context, _ in
+                                            // Opaque mask (blur visible everywhere)
+                                            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.white))
+                                            // Cut a hole where the scan window is (camera clear)
+                                            let rounded = Path(roundedRect: boxRect, cornerRadius: 20)
+                                            context.blendMode = .destinationOut
+                                            context.fill(rounded, with: .color(.black))
                                         }
                                     )
 
                                 // Scan window outline
-                                GeometryReader { proxy in
-                                    let size = proxy.size
-                                    let boxWidth = min(size.width * 0.8, 320)
-                                    let boxHeight = boxWidth
-                                    let rect = CGRect(x: (size.width - boxWidth)/2,
-                                                      y: (size.height - boxHeight)/2,
-                                                      width: boxWidth,
-                                                      height: boxHeight)
-
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .strokeBorder(.white.opacity(0.9), lineWidth: 2)
-                                        .frame(width: rect.width, height: rect.height)
-                                        .position(x: rect.midX, y: rect.midY)
-                                        .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 2)
-                                }
+                                RoundedRectangle(cornerRadius: 20)
+                                    .strokeBorder(.white.opacity(0.9), lineWidth: 2)
+                                    .frame(width: boxRect.width, height: boxRect.height)
+                                    .position(x: boxRect.midX, y: boxRect.midY)
+                                    .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 2)
                             }
-                        )
+                        }
 
-                    overlayUI
+                        // Bottom controls (outside camera area)
+                        bottomControls
+                    }
                 } else {
                     permissionUI
                 }
@@ -144,63 +135,60 @@ struct ScanView: View {
         }
     }
 
-    private var overlayUI: some View {
-        VStack(spacing: 0) {
-            // Top controls outside camera area
-            VStack(spacing: 8) {
-                // Buttons row
-                HStack {
-                    Button {
-                        showingPhotoPicker = true
-                    } label: {
-                        Label("Photo", systemImage: "photo.on.rectangle")
-                    }
-                    .buttonStyle(.bordered)
-
-                    Spacer()
-
-                    Button("Paste") { showingPaste = true }
-                        .buttonStyle(.borderedProminent)
-                }
-                .padding(.horizontal)
-                .padding(.top, 12)
-
-                // Info text below buttons
-                HStack {
-                    Text("Does not auto‑open links.")
-                        .font(.headline)
-                    Spacer(minLength: 12)
-                }
-                .padding(.horizontal)
-
-                HStack {
-                    Text("Scan → review → then open/copy/share.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Spacer(minLength: 12)
-                }
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-            }
-            .background(.ultraThinMaterial)
-
-            Spacer()
-
-            // Bottom controls outside camera area
+    private var topControls: some View {
+        VStack(spacing: 8) {
+            // Buttons row
             HStack {
-                Spacer()
                 Button {
-                    isTorchOn.toggle()
+                    showingPhotoPicker = true
                 } label: {
-                    Image(systemName: isTorchOn ? "flashlight.on.fill" : "flashlight.off.fill")
-                        .font(.title2)
-                        .padding()
-                        .background(.ultraThinMaterial, in: Circle())
+                    Label("Photo", systemImage: "photo.on.rectangle")
                 }
+                .buttonStyle(.bordered)
+
+                Spacer()
+
+                Button("Paste") { showingPaste = true }
+                    .buttonStyle(.borderedProminent)
             }
             .padding(.horizontal)
-            .padding(.bottom, 24)
+            .padding(.top, 12)
+
+            // Info text below buttons
+            HStack {
+                Text("Does not auto‑open links.")
+                    .font(.headline)
+                Spacer(minLength: 12)
+            }
+            .padding(.horizontal)
+
+            HStack {
+                Text("Scan → review → then open/copy/share.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 12)
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 8)
         }
+        .background(.ultraThinMaterial)
+    }
+
+    private var bottomControls: some View {
+        HStack {
+            Spacer()
+            Button {
+                isTorchOn.toggle()
+            } label: {
+                Image(systemName: isTorchOn ? "flashlight.on.fill" : "flashlight.off.fill")
+                    .font(.title2)
+                    .padding()
+                    .background(.ultraThinMaterial, in: Circle())
+            }
+        }
+        .padding(.horizontal)
+        .padding(.bottom, 24)
+        .background(.ultraThinMaterial)
     }
 
     private var permissionUI: some View {
