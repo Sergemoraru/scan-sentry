@@ -123,12 +123,8 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
 
         let preview = AVCaptureVideoPreviewLayer(session: session)
         preview.videoGravity = .resizeAspectFill
-        // Ensure full-screen preview respecting device bounds
-        if let window = view.window {
-            preview.frame = window.bounds
-        } else {
-            preview.frame = view.bounds
-        }
+        // Respect the container view's bounds (SwiftUI may size this view)
+        preview.frame = view.bounds
         view.layer.insertSublayer(preview, at: 0)
         previewLayer = preview
 
@@ -188,11 +184,8 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        if let window = view.window {
-            previewLayer?.frame = window.bounds
-        } else {
-            previewLayer?.frame = view.bounds
-        }
+        // Respect the container view's bounds (SwiftUI may size this view)
+        previewLayer?.frame = view.bounds
         setRegionOfInterest()
     }
 
