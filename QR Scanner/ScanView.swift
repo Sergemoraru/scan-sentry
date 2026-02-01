@@ -47,53 +47,54 @@ struct ScanView: View {
         NavigationStack {
             ZStack {
                 if cameraAuth == .authorized {
-                    VStack(spacing: 0) {
-                        // Top controls (outside camera area)
-                        topControls
+                    // Middle camera area (full screen background) with a centered scan window
+                    GeometryReader { proxy in
+                        let size = proxy.size
+                        let boxWidth = min(size.width * 0.8, 320.0)
+                        let boxHeight = boxWidth
+                        let boxRect = CGRect(x: (size.width - boxWidth)/2,
+                                             y: (size.height - boxHeight)/2,
+                                             width: boxWidth,
+                                             height: boxHeight)
 
-                        // Middle camera area with masked blur around a clear scan window
-                        GeometryReader { proxy in
-                            let size = proxy.size
-                            let boxWidth = min(size.width * 0.8, 320.0)
-                            let boxHeight = boxWidth
-                            let boxRect = CGRect(x: (size.width - boxWidth)/2,
-                                                 y: (size.height - boxHeight)/2,
-                                                 width: boxWidth,
-                                                 height: boxHeight)
+                        ZStack {
+                            Color(.systemBackground)
 
-                            ZStack {
-                                // Ensure the middle area is not the camera; use a system background
-                                Color(.systemBackground)
-
-                                // Dim everything outside the scan box with a cut-out hole
-                                Color.black.opacity(0.35)
-                                    .mask(
-                                        Canvas { context, _ in
-                                            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.white))
-                                            let rounded = Path(roundedRect: boxRect, cornerRadius: 20)
-                                            context.blendMode = .destinationOut
-                                            context.fill(rounded, with: .color(.black))
-                                        }
-                                    )
-
-                                // Camera feed clipped to the scan box
-                                CameraScannerView(isScanning: $isScanning, isTorchOn: $isTorchOn) { value, symbology in
-                                    handleScan(value, symbology: symbology)
-                                }
-                                .frame(width: boxRect.width, height: boxRect.height)
-                                .clipShape(RoundedRectangle(cornerRadius: 20))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .strokeBorder(.white.opacity(0.9), lineWidth: 2)
-                                        .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 2)
+                            // Dim everything outside the scan box with a cut-out hole
+                            Color.black.opacity(0.35)
+                                .mask(
+                                    Canvas { context, _ in
+                                        context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.white))
+                                        let rounded = Path(roundedRect: boxRect, cornerRadius: 20)
+                                        context.blendMode = .destinationOut
+                                        context.fill(rounded, with: .color(.black))
+                                    }
                                 )
-                                .position(x: boxRect.midX, y: boxRect.midY)
-                            }
-                        }
 
-                        // Bottom controls (outside camera area)
-                        bottomControls
+                            // Camera feed clipped to the scan box
+                            CameraScannerView(isScanning: $isScanning, isTorchOn: $isTorchOn) { value, symbology in
+                                handleScan(value, symbology: symbology)
+                            }
+                            .frame(width: boxRect.width, height: boxRect.height)
+                            .clipShape(RoundedRectangle(cornerRadius: 20))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .strokeBorder(.white.opacity(0.9), lineWidth: 2)
+                                    .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 2)
+                            )
+                            .position(x: boxRect.midX, y: boxRect.midY)
+                        }
                     }
+                    .ignoresSafeArea()
+
+                    // Pin controls to the safe-area edges (very top / very bottom)
+                    Color.clear
+                        .safeAreaInset(edge: .top, spacing: 0) {
+                            topControls
+                        }
+                        .safeAreaInset(edge: .bottom, spacing: 0) {
+                            bottomControls
+                        }
                 } else {
                     permissionUI
                 }
@@ -156,7 +157,7 @@ struct ScanView: View {
                     .buttonStyle(.borderedProminent)
             }
             .padding(.horizontal)
-            .padding(.top, 12)
+            .padding(.top, 0)
 
             // Info text below buttons
             HStack {
@@ -173,7 +174,7 @@ struct ScanView: View {
                 Spacer(minLength: 12)
             }
             .padding(.horizontal)
-            .padding(.bottom, 8)
+            .padding(.bottom, 0)
         }
         .background(Color(.systemBackground))
         .overlay(Divider(), alignment: .bottom)
@@ -192,7 +193,7 @@ struct ScanView: View {
             }
         }
         .padding(.horizontal)
-        .padding(.bottom, 24)
+        .padding(.bottom, 0)
         .background(Color(.systemBackground))
         .overlay(Divider(), alignment: .top)
     }
