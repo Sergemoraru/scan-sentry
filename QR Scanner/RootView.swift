@@ -9,7 +9,7 @@ private struct TabBarHeightKey: PreferenceKey {
 
 struct RootView: View {
     // User preference: keep the menu very close to the bottom.
-    private let tabBarBottomOffset: CGFloat = 30
+    private let tabBarBottomOffset: CGFloat = 0
 
     @State private var tab: AppTab = .scan
     @State private var tabBarHeight: CGFloat = 90
