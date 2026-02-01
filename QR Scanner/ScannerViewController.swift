@@ -208,8 +208,7 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
                 overlayLayer.path = UIBezierPath(rect: transformed.bounds).cgPath
             }
 
-            // Stop to prevent repeated callbacks
-            stopScanning()
+            // Let SwiftUI control pausing/resuming scanning (cooldown handled there).
 
             // Haptic feedback on successful scan
             let generator = UINotificationFeedbackGenerator()

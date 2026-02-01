@@ -155,8 +155,11 @@ struct ScanView: View {
                 }
             }
             .sheet(item: $parsed, onDismiss: {
-                // Resume scanning when the user dismisses the result
-                isScanning = true
+                // Cooldown before resuming scanning
+                let cooldown: TimeInterval = 3.0
+                DispatchQueue.main.asyncAfter(deadline: .now() + cooldown) {
+                    isScanning = true
+                }
                 // Clear previous result so a new scan presents fresh
                 self.parsed = nil
             }) { parsed in
@@ -322,12 +325,15 @@ struct ScanView: View {
         if let last = lastScanValue,
            let at = lastScanAt,
            last == trimmed,
-           Date().timeIntervalSince(at) < 2.0 {
+           Date().timeIntervalSince(at) < 3.0 {
             isScanning = true
             return
         }
         lastScanValue = trimmed
         lastScanAt = Date()
+
+        // Pause scanning while showing the review sheet
+        isScanning = false
 
         let parsed = ScanParser.parse(trimmed)
         self.parsed = parsed
