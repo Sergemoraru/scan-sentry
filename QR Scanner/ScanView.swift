@@ -5,7 +5,14 @@ import UIKit
 import PhotosUI
 import Vision
 
-private struct SizePreferenceKey: PreferenceKey {
+private struct TopBarHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct FlashHeightKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())
@@ -54,7 +61,7 @@ struct ScanView: View {
     @State private var pickedImageData: Data? = nil
 
     @State private var topBarHeight: CGFloat = 0
-    @State private var bottomBarHeight: CGFloat = 0
+    @State private var flashHeight: CGFloat = 0
 
     var body: some View {
         NavigationStack {
@@ -66,19 +73,23 @@ struct ScanView: View {
                         let size = proxy.size
                         let safe = proxy.safeAreaInsets
                         let availableTop = safe.top + topBarHeight
-                        // Also reserve space for the custom bottom tab bar.
-                        let availableBottom = safe.bottom + bottomBarHeight + bottomReserved
+
+                        // Reserve space for the custom bottom tab bar + the flashlight button
+                        // so the scan window never sits behind them.
+                        let availableBottom = safe.bottom + bottomReserved + flashHeight + 12
 
                         let boxWidth = min(size.width * 0.8, 320.0)
                         let boxHeight = boxWidth
 
-                        // Center the scan box within the space between the two bars.
+                        // Center the scan box within the space between the top bar and the bottom reserved area.
                         let usableHeight = max(0, size.height - availableTop - availableBottom)
                         let boxY = availableTop + max(0, (usableHeight - boxHeight) / 2) + (boxHeight / 2)
-                        let boxRect = CGRect(x: (size.width - boxWidth)/2,
-                                             y: boxY - boxHeight/2,
-                                             width: boxWidth,
-                                             height: boxHeight)
+                        let boxRect = CGRect(
+                            x: (size.width - boxWidth) / 2,
+                            y: boxY - boxHeight / 2,
+                            width: boxWidth,
+                            height: boxHeight
+                        )
 
                         ZStack {
                             Color(.systemBackground)
@@ -107,31 +118,32 @@ struct ScanView: View {
                             )
                             .position(x: boxRect.midX, y: boxRect.midY)
 
-                            // Top bar (pinned to very top of the phone)
+                            // Top bar pinned to the top edge
                             VStack(spacing: 0) {
                                 topControls
                                     .background(
                                         GeometryReader { g in
                                             Color.clear
-                                                .preference(key: SizePreferenceKey.self, value: g.size.height)
+                                                .preference(key: TopBarHeightKey.self, value: g.size.height)
                                         }
                                     )
-                                    .onPreferenceChange(SizePreferenceKey.self) { topBarHeight = $0 }
+                                    .onPreferenceChange(TopBarHeightKey.self) { topBarHeight = $0 }
                                 Spacer(minLength: 0)
                             }
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
-                            // Bottom bar (pinned to very bottom *above the TabView*)
+                            // Flashlight button pinned above the custom tab bar
                             VStack(spacing: 0) {
                                 Spacer(minLength: 0)
                                 bottomControls
                                     .background(
                                         GeometryReader { g in
                                             Color.clear
-                                                .preference(key: SizePreferenceKey.self, value: g.size.height)
+                                                .preference(key: FlashHeightKey.self, value: g.size.height)
                                         }
                                     )
-                                    .onPreferenceChange(SizePreferenceKey.self) { bottomBarHeight = $0 }
+                                    .onPreferenceChange(FlashHeightKey.self) { flashHeight = $0 }
+                                    .padding(.bottom, bottomReserved)
                             }
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                         }
