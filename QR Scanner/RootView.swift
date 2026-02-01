@@ -8,32 +8,37 @@ private struct TabBarHeightKey: PreferenceKey {
 }
 
 struct RootView: View {
-    // User preference: keep the menu very close to the bottom.
-    private let tabBarBottomOffset: CGFloat = 0
+    // Distance from the *physical* bottom edge.
+    private let tabBarBottomInset: CGFloat = 10
 
     @State private var tab: AppTab = .scan
     @State private var tabBarHeight: CGFloat = 90
 
-    private var bottomReserved: CGFloat { tabBarBottomOffset + tabBarHeight }
+    private var bottomReserved: CGFloat { tabBarBottomInset + tabBarHeight }
 
     var body: some View {
-        ZStack {
-            Group {
-                switch tab {
-                case .scan:
-                    ScanView(bottomReserved: bottomReserved)
-                case .history:
-                    HistoryView()
-                        .padding(.bottom, bottomReserved)
-                case .settings:
-                    SettingsView()
-                        .padding(.bottom, bottomReserved)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        GeometryReader { proxy in
+            let size = proxy.size
 
-            VStack {
-                Spacer(minLength: 0)
+            ZStack {
+                Group {
+                    switch tab {
+                    case .scan:
+                        ScanView(bottomReserved: bottomReserved)
+                    case .history:
+                        HistoryView()
+                            .safeAreaInset(edge: .bottom) {
+                                Color.clear.frame(height: bottomReserved)
+                            }
+                    case .settings:
+                        SettingsView()
+                            .safeAreaInset(edge: .bottom) {
+                                Color.clear.frame(height: bottomReserved)
+                            }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
                 CustomTabBar(selection: $tab)
                     .background(
                         GeometryReader { g in
@@ -42,10 +47,10 @@ struct RootView: View {
                         }
                     )
                     .onPreferenceChange(TabBarHeightKey.self) { tabBarHeight = $0 }
-                    .padding(.bottom, tabBarBottomOffset)
+                    // Absolutely position at the physical bottom edge.
+                    .position(x: size.width / 2, y: size.height - tabBarBottomInset - (tabBarHeight / 2))
             }
-            // Let the bar float closer to the physical bottom edge.
-            .ignoresSafeArea(.container, edges: .bottom)
+            .ignoresSafeArea()
         }
     }
 }

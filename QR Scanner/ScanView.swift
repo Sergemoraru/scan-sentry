@@ -76,7 +76,8 @@ struct ScanView: View {
 
                         // Reserve space for the custom bottom tab bar + the flashlight button
                         // so the scan window never sits behind them.
-                        let availableBottom = safe.bottom + bottomReserved + flashHeight + 12
+                        // Extra breathing room so the flashlight/menu never overlaps the scan window.
+                        let availableBottom = safe.bottom + bottomReserved + flashHeight + 36
 
                         let boxWidth = min(size.width * 0.8, 320.0)
                         let boxHeight = boxWidth
