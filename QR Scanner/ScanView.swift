@@ -5,6 +5,13 @@ import UIKit
 import PhotosUI
 import Vision
 
+private struct SizePreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct VisualEffectBlur: UIViewRepresentable {
     var style: UIBlurEffect.Style = .systemThinMaterial
 
@@ -43,20 +50,29 @@ struct ScanView: View {
     @State private var selectedPhoto: PhotosPickerItem? = nil
     @State private var pickedImageData: Data? = nil
 
+    @State private var topBarHeight: CGFloat = 0
+    @State private var bottomBarHeight: CGFloat = 0
+
     var body: some View {
         NavigationStack {
             ZStack {
                 if cameraAuth == .authorized {
-                    // Middle camera area (full screen background) with a centered scan window
+                    // Camera area fills the screen; controls are separate "bars" pinned
+                    // to the top/bottom safe areas (not inside the camera box).
                     GeometryReader { proxy in
                         let size = proxy.size
-                        // Slightly smaller scan window so UI doesn't crowd it
-                        let boxWidth = min(size.width * 0.76, 300.0)
+                        let safe = proxy.safeAreaInsets
+                        let availableTop = safe.top + topBarHeight
+                        let availableBottom = safe.bottom + bottomBarHeight
+
+                        let boxWidth = min(size.width * 0.8, 320.0)
                         let boxHeight = boxWidth
-                        // Shift the scan window upward so bottom UI doesn't cover it.
-                        let yOffset: CGFloat = -80
+
+                        // Center the scan box within the space between the two bars.
+                        let usableHeight = max(0, size.height - availableTop - availableBottom)
+                        let boxY = availableTop + max(0, (usableHeight - boxHeight) / 2) + (boxHeight / 2)
                         let boxRect = CGRect(x: (size.width - boxWidth)/2,
-                                             y: (size.height - boxHeight)/2 + yOffset,
+                                             y: boxY - boxHeight/2,
                                              width: boxWidth,
                                              height: boxHeight)
 
@@ -86,26 +102,37 @@ struct ScanView: View {
                                     .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 2)
                             )
                             .position(x: boxRect.midX, y: boxRect.midY)
-                        }
-                    }
-                    .ignoresSafeArea()
 
-                    // Top controls pinned to absolute top (can extend into unsafe area)
-                    VStack(spacing: 0) {
-                        topControls
-                            .offset(y: -18)
-                        Spacer(minLength: 0)
-                    }
-                    .ignoresSafeArea(.container, edges: [.top])
+                            // Top bar (pinned to very top of the phone)
+                            VStack(spacing: 0) {
+                                topControls
+                                    .background(
+                                        GeometryReader { g in
+                                            Color.clear
+                                                .preference(key: SizePreferenceKey.self, value: g.size.height)
+                                        }
+                                    )
+                                    .onPreferenceChange(SizePreferenceKey.self) { topBarHeight = $0 }
+                                Spacer(minLength: 0)
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
-                    // Bottom controls sit ABOVE the system TabView bar
-                    // (safeAreaInset places content above the tab bar)
-                    Color.clear
-                        .safeAreaInset(edge: .bottom, spacing: 0) {
-                            // Nudge down so it sits closer to the tab bar (freeing camera area)
-                            bottomControls
-                                .offset(y: 36)
+                            // Bottom bar (pinned to very bottom *above the TabView*)
+                            VStack(spacing: 0) {
+                                Spacer(minLength: 0)
+                                bottomControls
+                                    .background(
+                                        GeometryReader { g in
+                                            Color.clear
+                                                .preference(key: SizePreferenceKey.self, value: g.size.height)
+                                        }
+                                    )
+                                    .onPreferenceChange(SizePreferenceKey.self) { bottomBarHeight = $0 }
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                         }
+                        .ignoresSafeArea()
+                    }
                 } else {
                     permissionUI
                 }
