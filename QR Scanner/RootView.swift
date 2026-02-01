@@ -9,7 +9,7 @@ private struct TabBarHeightKey: PreferenceKey {
 
 struct RootView: View {
     // Distance from the *physical* bottom edge.
-    private let tabBarBottomInset: CGFloat = 10
+    private let tabBarBottomInset: CGFloat = 0
 
     @State private var tab: AppTab = .scan
     @State private var tabBarHeight: CGFloat = 90
@@ -19,6 +19,7 @@ struct RootView: View {
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size
+            let safe = proxy.safeAreaInsets
 
             ZStack {
                 Group {
@@ -48,7 +49,11 @@ struct RootView: View {
                     )
                     .onPreferenceChange(TabBarHeightKey.self) { tabBarHeight = $0 }
                     // Absolutely position at the physical bottom edge.
-                    .position(x: size.width / 2, y: size.height - tabBarBottomInset - (tabBarHeight / 2))
+                    .position(
+                        x: size.width / 2,
+                        y: (size.height + safe.bottom) - tabBarBottomInset - (tabBarHeight / 2)
+                    ) // include unsafe-area height so we can reach the physical bottom
+                    .ignoresSafeArea(.container, edges: .bottom)
             }
             .ignoresSafeArea()
         }

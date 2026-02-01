@@ -134,8 +134,9 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
     private func setRegionOfInterest() {
         guard let preview = previewLayer, let output = metadataOutput else { return }
         let bounds = view.bounds
-        let side = min(bounds.width, bounds.height) * 0.6
-        let roi = CGRect(x: (bounds.width - side)/2, y: (bounds.height - side)/2, width: side, height: side)
+        // Use a larger ROI to improve detection reliability in a small preview.
+        let side = min(bounds.width, bounds.height) * 0.9
+        let roi = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
 
         let metadataRect = preview.metadataOutputRectConverted(fromLayerRect: roi)
         output.rectOfInterest = metadataRect
