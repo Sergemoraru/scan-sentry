@@ -87,13 +87,19 @@ struct ScanView: View {
                     }
                     .ignoresSafeArea()
 
-                    // Controls overlay pinned to absolute top/bottom (can extend into unsafe area)
+                    // Top controls pinned to absolute top (can extend into unsafe area)
                     VStack(spacing: 0) {
                         topControls
                         Spacer(minLength: 0)
-                        bottomControls
                     }
-                    .ignoresSafeArea(.container, edges: [.top, .bottom])
+                    .ignoresSafeArea(.container, edges: [.top])
+
+                    // Bottom controls sit ABOVE the system TabView bar
+                    // (safeAreaInset places content above the tab bar)
+                    Color.clear
+                        .safeAreaInset(edge: .bottom, spacing: 0) {
+                            bottomControls
+                        }
                 } else {
                     permissionUI
                 }
