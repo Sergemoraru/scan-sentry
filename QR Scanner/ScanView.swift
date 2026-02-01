@@ -52,8 +52,10 @@ struct ScanView: View {
                         let size = proxy.size
                         let boxWidth = min(size.width * 0.8, 320.0)
                         let boxHeight = boxWidth
+                        // Shift the scan window slightly upward so bottom UI doesn't cover it.
+                        let yOffset: CGFloat = -44
                         let boxRect = CGRect(x: (size.width - boxWidth)/2,
-                                             y: (size.height - boxHeight)/2,
+                                             y: (size.height - boxHeight)/2 + yOffset,
                                              width: boxWidth,
                                              height: boxHeight)
 
@@ -90,6 +92,7 @@ struct ScanView: View {
                     // Top controls pinned to absolute top (can extend into unsafe area)
                     VStack(spacing: 0) {
                         topControls
+                            .offset(y: -10)
                         Spacer(minLength: 0)
                     }
                     .ignoresSafeArea(.container, edges: [.top])
@@ -98,7 +101,9 @@ struct ScanView: View {
                     // (safeAreaInset places content above the tab bar)
                     Color.clear
                         .safeAreaInset(edge: .bottom, spacing: 0) {
+                            // Nudge down so it sits closer to the tab bar (freeing camera area)
                             bottomControls
+                                .offset(y: 18)
                         }
                 } else {
                     permissionUI
