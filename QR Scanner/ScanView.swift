@@ -3,6 +3,10 @@ import SwiftData
 import AVFoundation
 import UIKit
 
+extension ParsedScan: Identifiable {
+    var id: String { raw }
+}
+
 struct ScanView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
@@ -13,7 +17,6 @@ struct ScanView: View {
     @State private var lastScanValue: String?
     @State private var lastScanAt: Date?
 
-    @State private var showingResult = false
     @State private var parsed: ParsedScan?
 
     @State private var showingPaste = false
@@ -36,76 +39,43 @@ struct ScanView: View {
                     permissionUI
                 }
             }
-            .navigationTitle("Safe QR")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Menu {
-                        Button {
-                            handleScan("https://apple.com", symbology: "test")
-                        } label: {
-                            Label("Inject Test URL", systemImage: "link")
-                        }
-                        Button {
-                            handleScan("Hello from simulator", symbology: "test")
-                        } label: {
-                            Label("Inject Test Text", systemImage: "text.quote")
-                        }
-                    } label: {
-                        Label("Test", systemImage: "hammer")
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Paste") { showingPaste = true }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isTorchOn.toggle()
-                    } label: {
-                        Image(systemName: isTorchOn ? "flashlight.on.fill" : "flashlight.off.fill")
-                    }
-                }
-            }
-            .sheet(isPresented: $showingPaste) {
-                NavigationStack {
-                    Form {
-                        Section("Paste a QR payload") {
-                            TextEditor(text: $pasteText)
-                                .frame(minHeight: 160)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                        }
-                        Button("Use This") {
-                            handleScan(pasteText, symbology: "pasted")
-                            showingPaste = false
-                            pasteText = ""
-                        }
-                    }
-                    .navigationTitle("Paste")
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Close") { showingPaste = false }
-                        }
-                    }
-                }
-            }
-            .sheet(isPresented: $showingResult, onDismiss: {
+            .sheet(item: $parsed, onDismiss: {
                 // Resume scanning when the user dismisses the result
                 isScanning = true
-            }) {
-                if let parsed {
-                    ScanResultView(parsed: parsed, confirmBeforeOpen: confirmBeforeOpen)
-                        .presentationDetents([.medium, .large])
-                }
+                // Clear previous result so a new scan presents fresh
+                self.parsed = nil
+            }) { parsed in
+                ScanResultView(parsed: parsed, confirmBeforeOpen: confirmBeforeOpen)
+                    .presentationDetents([.medium, .large])
             }
             .onAppear {
                 cameraAuth = AVCaptureDevice.authorizationStatus(for: .video)
+                if cameraAuth == .authorized { isScanning = true }
+            }
+            .toolbar(.hidden, for: .navigationBar)
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+                cameraAuth = AVCaptureDevice.authorizationStatus(for: .video)
+            }
+            .onChange(of: isScanning) { scanning in
+                if scanning { self.parsed = nil }
             }
         }
     }
 
     private var overlayUI: some View {
         VStack {
+            // Top bar
+            HStack {
+                Spacer()
+                Button("Paste") { showingPaste = true }
+                    .buttonStyle(.borderedProminent)
+            }
+            .padding(.horizontal)
+            .padding(.top, 12)
+
             Spacer()
+
+            // Info text centered above bottom controls
             VStack(spacing: 10) {
                 Text("Does not auto‑open links.")
                     .font(.headline)
@@ -116,7 +86,21 @@ struct ScanView: View {
             .padding()
             .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 14))
-            .padding(.bottom, 22)
+
+            // Bottom bar
+            HStack {
+                Spacer()
+                Button {
+                    isTorchOn.toggle()
+                } label: {
+                    Image(systemName: isTorchOn ? "flashlight.on.fill" : "flashlight.off.fill")
+                        .font(.title2)
+                        .padding()
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 24)
         }
     }
 
@@ -130,6 +114,7 @@ struct ScanView: View {
                     AVCaptureDevice.requestAccess(for: .video) { _ in
                         DispatchQueue.main.async {
                             cameraAuth = AVCaptureDevice.authorizationStatus(for: .video)
+                            if cameraAuth == .authorized { isScanning = true }
                         }
                     }
                 }
@@ -176,8 +161,5 @@ struct ScanView: View {
             let record = ScanRecord(rawValue: parsed.raw, kindRaw: parsed.kind.rawValue, symbology: symbology)
             modelContext.insert(record)
         }
-
-        showingResult = true
-        isScanning = false
     }
 }

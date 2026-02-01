@@ -41,6 +41,9 @@ struct HistoryView: View {
     @State private var showShare = false
     @State private var shareText: String = ""
 
+    @State private var selection = Set<ObjectIdentifier>()
+    @State private var editMode: EditMode = .inactive
+
     private var kindOptions: [String] {
         Array(Set(scans.map { $0.kindRaw })).sorted()
     }
@@ -66,7 +69,7 @@ struct HistoryView: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            List(selection: $selection) {
                 if filtered.isEmpty {
                     ContentUnavailableView("No scans yet", systemImage: "clock")
                 } else {
@@ -89,6 +92,12 @@ struct HistoryView: View {
                             Text(scan.createdAt, style: .date)
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
+                        }
+                        .contentShape(Rectangle())
+                        .tag(ObjectIdentifier(scan))
+                        .onLongPressGesture {
+                            editMode = .active
+                            selection.insert(ObjectIdentifier(scan))
                         }
                         .swipeActions(edge: .trailing) {
                             Button {
@@ -143,6 +152,15 @@ struct HistoryView: View {
                     .disabled(scans.isEmpty)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    if editMode == .active && !selection.isEmpty {
+                        Button(role: .destructive) {
+                            deleteSelected()
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     EditButton()
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -172,7 +190,18 @@ struct HistoryView: View {
             .sheet(isPresented: $showShare) {
                 ActivityView(activityItems: [shareText])
             }
+            .environment(\.editMode, $editMode)
         }
+    }
+
+    private func deleteSelected() {
+        let ids = selection
+        for scan in scans {
+            if ids.contains(ObjectIdentifier(scan)) {
+                modelContext.delete(scan)
+            }
+        }
+        selection.removeAll()
     }
 }
 private struct ActivityView: UIViewControllerRepresentable {
