@@ -87,14 +87,13 @@ struct ScanView: View {
                     }
                     .ignoresSafeArea()
 
-                    // Pin controls to the safe-area edges (very top / very bottom)
-                    Color.clear
-                        .safeAreaInset(edge: .top, spacing: 0) {
-                            topControls
-                        }
-                        .safeAreaInset(edge: .bottom, spacing: 0) {
-                            bottomControls
-                        }
+                    // Controls overlay pinned to absolute top/bottom (can extend into unsafe area)
+                    VStack(spacing: 0) {
+                        topControls
+                        Spacer(minLength: 0)
+                        bottomControls
+                    }
+                    .ignoresSafeArea(.container, edges: [.top, .bottom])
                 } else {
                     permissionUI
                 }
@@ -176,7 +175,7 @@ struct ScanView: View {
             .padding(.horizontal)
             .padding(.bottom, 0)
         }
-        .background(Color(.systemBackground))
+        .background(Color(.systemBackground).ignoresSafeArea(.container, edges: .top))
         .overlay(Divider(), alignment: .bottom)
     }
 
@@ -194,7 +193,7 @@ struct ScanView: View {
         }
         .padding(.horizontal)
         .padding(.bottom, 0)
-        .background(Color(.systemBackground))
+        .background(Color(.systemBackground).ignoresSafeArea(.container, edges: .bottom))
         .overlay(Divider(), alignment: .top)
     }
 
