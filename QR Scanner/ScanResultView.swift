@@ -3,16 +3,13 @@ import UIKit
 import NetworkExtension
 import SafariServices
 
-extension URL: Identifiable {
-    public var id: String { absoluteString }
-}
-
 struct ScanResultView: View {
     @Environment(\.openURL) private var openURL
     @State private var showConfirm = false
     @AppStorage("aggressiveRiskAnalysis") private var aggressive = true
     @State private var wifiAlert: (title: String, message: String)? = nil
     @State private var safariURL: URL? = nil
+    @State private var isShowingSafari: Bool = false
 
     let parsed: ParsedScan
     let confirmBeforeOpen: Bool
@@ -60,8 +57,10 @@ struct ScanResultView: View {
             } message: {
                 Text(wifiAlert?.message ?? "")
             }
-            .sheet(item: $safariURL) { url in
-                SafariView(url: url)
+            .sheet(isPresented: $isShowingSafari) {
+                if let url = safariURL {
+                    SafariView(url: url)
+                }
             }
         }
     }
@@ -121,6 +120,7 @@ struct ScanResultView: View {
 
             Button {
                 safariURL = url
+                isShowingSafari = true
             } label: {
                 Label("Open In‑App", systemImage: "safari")
             }
@@ -143,14 +143,20 @@ struct ScanResultView: View {
             DispatchQueue.main.async {
                 if let nsError = error as NSError? {
                     if nsError.domain == NEHotspotConfigurationErrorDomain,
-                       let code = NEHotspotConfigurationError.Code(rawValue: nsError.code) {
+                       let code = NEHotspotConfigurationError(rawValue: nsError.code) {
                         switch code {
-                        case .userDenied: wifiAlert = ("Wi‑Fi", "User canceled join.")
-                        case .invalid: wifiAlert = ("Wi‑Fi", "Invalid configuration.")
-                        case .invalidSSID: wifiAlert = ("Wi‑Fi", "Invalid SSID.")
-                        case .invalidWPAPassphrase, .invalidWEPPassphrase: wifiAlert = ("Wi‑Fi", "Invalid Wi‑Fi password.")
-                        case .alreadyAssociated: wifiAlert = ("Wi‑Fi", "Already connected to \(wifi.ssid)")
-                        default: wifiAlert = ("Wi‑Fi", nsError.localizedDescription)
+                        case .userDenied:
+                            wifiAlert = ("Wi‑Fi", "User canceled join.")
+                        case .invalid:
+                            wifiAlert = ("Wi‑Fi", "Invalid configuration.")
+                        case .invalidSSID:
+                            wifiAlert = ("Wi‑Fi", "Invalid SSID.")
+                        case .invalidWPAPassphrase, .invalidWEPPassphrase:
+                            wifiAlert = ("Wi‑Fi", "Invalid Wi‑Fi password.")
+                        case .alreadyAssociated:
+                            wifiAlert = ("Wi‑Fi", "Already connected to \(wifi.ssid)")
+                        default:
+                            wifiAlert = ("Wi‑Fi", nsError.localizedDescription)
                         }
                     } else {
                         wifiAlert = ("Wi‑Fi", nsError.localizedDescription)
