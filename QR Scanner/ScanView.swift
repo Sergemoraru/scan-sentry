@@ -2,6 +2,8 @@ import SwiftUI
 import SwiftData
 import AVFoundation
 import UIKit
+import PhotosUI
+import Vision
 
 extension ParsedScan: Identifiable {
     var id: String { raw }
@@ -24,6 +26,10 @@ struct ScanView: View {
 
     @State private var cameraAuth = AVCaptureDevice.authorizationStatus(for: .video)
     @State private var isTorchOn = false
+
+    @State private var showingPhotoPicker = false
+    @State private var selectedPhoto: PhotosPickerItem? = nil
+    @State private var pickedImageData: Data? = nil
 
     var body: some View {
         NavigationStack {
@@ -48,6 +54,15 @@ struct ScanView: View {
                 ScanResultView(parsed: parsed, confirmBeforeOpen: confirmBeforeOpen)
                     .presentationDetents([.medium, .large])
             }
+            .sheet(isPresented: $showingPaste) {
+                PasteSheet(pasteText: $pasteText) { pasteText in
+                    showingPaste = false
+                    guard let pasteText else { return }
+                    let parsed = ScanParser.parse(pasteText)
+                    self.parsed = parsed
+                }
+            }
+            .photosPicker(isPresented: $showingPhotoPicker, selection: $selectedPhoto, matching: .images)
             .onAppear {
                 cameraAuth = AVCaptureDevice.authorizationStatus(for: .video)
                 if cameraAuth == .authorized { isScanning = true }
@@ -55,6 +70,15 @@ struct ScanView: View {
             .toolbar(.hidden, for: .navigationBar)
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                 cameraAuth = AVCaptureDevice.authorizationStatus(for: .video)
+            }
+            .onChange(of: selectedPhoto) { newItem in
+                guard let item = newItem else { return }
+                Task {
+                    if let data = try? await item.loadTransferable(type: Data.self) {
+                        await analyzePickedImageData(data)
+                    }
+                    selectedPhoto = nil
+                }
             }
             .onChange(of: isScanning) { scanning in
                 if scanning { self.parsed = nil }
@@ -66,7 +90,15 @@ struct ScanView: View {
         VStack {
             // Top bar
             HStack {
+                Button {
+                    showingPhotoPicker = true
+                } label: {
+                    Label("Photo", systemImage: "photo.on.rectangle")
+                }
+                .buttonStyle(.bordered)
+
                 Spacer()
+
                 Button("Paste") { showingPaste = true }
                     .buttonStyle(.borderedProminent)
             }
@@ -137,6 +169,25 @@ struct ScanView: View {
             }
         }
         .padding()
+    }
+
+    @MainActor
+    private func analyzePickedImageData(_ data: Data) async {
+        pickedImageData = data
+        guard let uiImage = UIImage(data: data), let cgImage = uiImage.cgImage else { return }
+
+        let request = VNDetectBarcodesRequest { request, _ in
+            if let result = (request.results as? [VNBarcodeObservation])?.first,
+               let payload = result.payloadStringValue {
+                handleScan(payload, symbology: result.symbology.rawValue)
+            } else {
+                // Optional: show a gentle alert/toast; for now, no-op
+            }
+        }
+        request.symbologies = [.QR, .Aztec, .DataMatrix, .PDF417, .Code128, .Code39, .EAN13, .EAN8, .UPCE]
+
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        try? handler.perform([request])
     }
 
     private func handleScan(_ value: String, symbology: String?) {

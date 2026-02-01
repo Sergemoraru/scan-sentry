@@ -26,6 +26,14 @@ struct URLRiskReport {
     let level: RiskLevel
 }
 
+struct WiFiConfig {
+    let ssid: String
+    let passphrase: String?
+    let isWEP: Bool
+    let isOpen: Bool
+    let hidden: Bool
+}
+
 struct ScanParser {
     static func parse(_ input: String) -> ParsedScan {
         let raw = input.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -44,6 +52,73 @@ struct ScanParser {
         }
 
         return .init(raw: raw, kind: .text, normalizedURL: nil)
+    }
+
+    static func parseWiFi(_ raw: String) -> WiFiConfig? {
+        // Expect format WIFI:T:WPA;S:SSID;P:password;H:true;; (case-insensitive)
+        let prefix = "wifi:"
+        guard raw.lowercased().hasPrefix(prefix) else { return nil }
+        let body = String(raw.dropFirst(prefix.count))
+
+        // Split into key:value pairs by ';' while handling escaped '\;' and '\\'
+        var pairs: [String] = []
+        var current = ""
+        var escape = false
+        for ch in body {
+            if escape {
+                current.append(ch)
+                escape = false
+            } else if ch == "\\" {
+                escape = true
+            } else if ch == ";" {
+                pairs.append(current)
+                current = ""
+            } else {
+                current.append(ch)
+            }
+        }
+        if !current.isEmpty { pairs.append(current) }
+
+        func unescape(_ s: String) -> String {
+            var out = ""
+            var esc = false
+            for c in s {
+                if esc {
+                    out.append(c)
+                    esc = false
+                } else if c == "\\" {
+                    esc = true
+                } else {
+                    out.append(c)
+                }
+            }
+            return out
+        }
+
+        var ssid: String?
+        var type: String?
+        var pass: String?
+        var hidden = false
+
+        for pair in pairs {
+            let parts = pair.split(separator: ":", maxSplits: 1).map(String.init)
+            guard parts.count == 2 else { continue }
+            let key = parts[0].uppercased()
+            let value = unescape(parts[1])
+            switch key {
+            case "S": ssid = value
+            case "T": type = value.uppercased()
+            case "P": pass = value
+            case "H": hidden = (value == "true" || value == "TRUE" || value == "1")
+            default: break
+            }
+        }
+
+        guard let ssidUnwrapped = ssid, !ssidUnwrapped.isEmpty else { return nil }
+        let t = (type ?? "").uppercased()
+        let isOpen = (t == "NOPASS") || (pass ?? "").isEmpty
+        let isWEP = (t == "WEP")
+        return WiFiConfig(ssid: ssidUnwrapped, passphrase: isOpen ? nil : pass, isWEP: isWEP, isOpen: isOpen, hidden: hidden)
     }
 
     private static func normalizeURL(_ raw: String) -> URL? {
@@ -203,3 +278,4 @@ struct URLRiskAnalyzer {
         return true
     }
 }
+

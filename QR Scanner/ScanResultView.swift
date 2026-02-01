@@ -1,10 +1,18 @@
 import SwiftUI
 import UIKit
+import NetworkExtension
+import SafariServices
+
+extension URL: Identifiable {
+    public var id: String { absoluteString }
+}
 
 struct ScanResultView: View {
     @Environment(\.openURL) private var openURL
     @State private var showConfirm = false
     @AppStorage("aggressiveRiskAnalysis") private var aggressive = true
+    @State private var wifiAlert: (title: String, message: String)? = nil
+    @State private var safariURL: URL? = nil
 
     let parsed: ParsedScan
     let confirmBeforeOpen: Bool
@@ -36,9 +44,25 @@ struct ScanResultView: View {
                     ShareLink(item: parsed.raw) {
                         Text("Share")
                     }
+                    
+                    if parsed.kind == .wifi, let wifi = ScanParser.parseWiFi(parsed.raw) {
+                        Button {
+                            joinWiFi(wifi)
+                        } label: {
+                            Label("Join Wi‑Fi \(wifi.ssid)", systemImage: "wifi")
+                        }
+                    }
                 }
             }
             .navigationTitle("Review")
+            .alert(wifiAlert?.title ?? "", isPresented: .init(get: { wifiAlert != nil }, set: { if !$0 { wifiAlert = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(wifiAlert?.message ?? "")
+            }
+            .sheet(item: $safariURL) { url in
+                SafariView(url: url)
+            }
         }
     }
 
@@ -94,7 +118,55 @@ struct ScanResultView: View {
             } message: {
                 Text(url.absoluteString)
             }
+
+            Button {
+                safariURL = url
+            } label: {
+                Label("Open In‑App", systemImage: "safari")
+            }
+        }
+    }
+
+    private func joinWiFi(_ wifi: WiFiConfig) {
+        let config: NEHotspotConfiguration
+        if wifi.isOpen {
+            config = NEHotspotConfiguration(ssid: wifi.ssid)
+        } else if let pass = wifi.passphrase {
+            config = NEHotspotConfiguration(ssid: wifi.ssid, passphrase: pass, isWEP: wifi.isWEP)
+        } else {
+            wifiAlert = ("Wi‑Fi", "Missing password for network \(wifi.ssid)")
+            return
+        }
+        config.joinOnce = true
+        config.hidden = wifi.hidden
+        NEHotspotConfigurationManager.shared.apply(config) { error in
+            DispatchQueue.main.async {
+                if let error = error as? NEHotspotConfigurationError {
+                    switch error.code {
+                    case .userDenied: wifiAlert = ("Wi‑Fi", "User canceled join.")
+                    case .invalid: wifiAlert = ("Wi‑Fi", "Invalid configuration.")
+                    case .invalidSSID: wifiAlert = ("Wi‑Fi", "Invalid SSID.")
+                    case .invalidWPAPassphrase, .invalidWEPPassphrase: wifiAlert = ("Wi‑Fi", "Invalid Wi‑Fi password.")
+                    case .alreadyAssociated: wifiAlert = ("Wi‑Fi", "Already connected to \(wifi.ssid)")
+                    default: wifiAlert = ("Wi‑Fi", error.localizedDescription)
+                    }
+                } else if let error = error {
+                    wifiAlert = ("Wi‑Fi", error.localizedDescription)
+                } else {
+                    wifiAlert = ("Wi‑Fi", "Joined \(wifi.ssid)")
+                }
+            }
         }
     }
 }
 
+private struct SafariView: UIViewControllerRepresentable {
+    let url: URL
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let config = SFSafariViewController.Configuration()
+        config.entersReaderIfAvailable = false
+        let vc = SFSafariViewController(url: url, configuration: config)
+        return vc
+    }
+    func updateUIViewController(_ vc: SFSafariViewController, context: Context) {}
+}
