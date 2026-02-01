@@ -184,7 +184,7 @@ struct ScanView: View {
                 // Optional: show a gentle alert/toast; for now, no-op
             }
         }
-        request.symbologies = [.QR, .Aztec, .DataMatrix, .PDF417, .Code128, .Code39, .EAN13, .EAN8, .UPCE]
+        request.symbologies = [.qr, .aztec, .dataMatrix, .pdf417, .code128, .code39, .ean13, .ean8, .upce]
 
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         try? handler.perform([request])
@@ -214,3 +214,4 @@ struct ScanView: View {
         }
     }
 }
+

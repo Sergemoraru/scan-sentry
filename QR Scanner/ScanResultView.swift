@@ -141,17 +141,20 @@ struct ScanResultView: View {
         config.hidden = wifi.hidden
         NEHotspotConfigurationManager.shared.apply(config) { error in
             DispatchQueue.main.async {
-                if let error = error as? NEHotspotConfigurationError {
-                    switch error.code {
-                    case .userDenied: wifiAlert = ("Wi‑Fi", "User canceled join.")
-                    case .invalid: wifiAlert = ("Wi‑Fi", "Invalid configuration.")
-                    case .invalidSSID: wifiAlert = ("Wi‑Fi", "Invalid SSID.")
-                    case .invalidWPAPassphrase, .invalidWEPPassphrase: wifiAlert = ("Wi‑Fi", "Invalid Wi‑Fi password.")
-                    case .alreadyAssociated: wifiAlert = ("Wi‑Fi", "Already connected to \(wifi.ssid)")
-                    default: wifiAlert = ("Wi‑Fi", error.localizedDescription)
+                if let nsError = error as NSError? {
+                    if nsError.domain == NEHotspotConfigurationErrorDomain,
+                       let code = NEHotspotConfigurationError.Code(rawValue: nsError.code) {
+                        switch code {
+                        case .userDenied: wifiAlert = ("Wi‑Fi", "User canceled join.")
+                        case .invalid: wifiAlert = ("Wi‑Fi", "Invalid configuration.")
+                        case .invalidSSID: wifiAlert = ("Wi‑Fi", "Invalid SSID.")
+                        case .invalidWPAPassphrase, .invalidWEPPassphrase: wifiAlert = ("Wi‑Fi", "Invalid Wi‑Fi password.")
+                        case .alreadyAssociated: wifiAlert = ("Wi‑Fi", "Already connected to \(wifi.ssid)")
+                        default: wifiAlert = ("Wi‑Fi", nsError.localizedDescription)
+                        }
+                    } else {
+                        wifiAlert = ("Wi‑Fi", nsError.localizedDescription)
                     }
-                } else if let error = error {
-                    wifiAlert = ("Wi‑Fi", error.localizedDescription)
                 } else {
                     wifiAlert = ("Wi‑Fi", "Joined \(wifi.ssid)")
                 }
