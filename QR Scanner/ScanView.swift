@@ -50,10 +50,11 @@ struct ScanView: View {
                     // Middle camera area (full screen background) with a centered scan window
                     GeometryReader { proxy in
                         let size = proxy.size
-                        let boxWidth = min(size.width * 0.8, 320.0)
+                        // Slightly smaller scan window so UI doesn't crowd it
+                        let boxWidth = min(size.width * 0.76, 300.0)
                         let boxHeight = boxWidth
-                        // Shift the scan window slightly upward so bottom UI doesn't cover it.
-                        let yOffset: CGFloat = -44
+                        // Shift the scan window upward so bottom UI doesn't cover it.
+                        let yOffset: CGFloat = -80
                         let boxRect = CGRect(x: (size.width - boxWidth)/2,
                                              y: (size.height - boxHeight)/2 + yOffset,
                                              width: boxWidth,
@@ -92,7 +93,7 @@ struct ScanView: View {
                     // Top controls pinned to absolute top (can extend into unsafe area)
                     VStack(spacing: 0) {
                         topControls
-                            .offset(y: -10)
+                            .offset(y: -18)
                         Spacer(minLength: 0)
                     }
                     .ignoresSafeArea(.container, edges: [.top])
@@ -103,7 +104,7 @@ struct ScanView: View {
                         .safeAreaInset(edge: .bottom, spacing: 0) {
                             // Nudge down so it sits closer to the tab bar (freeing camera area)
                             bottomControls
-                                .offset(y: 18)
+                                .offset(y: 36)
                         }
                 } else {
                     permissionUI
@@ -145,6 +146,13 @@ struct ScanView: View {
             }
             .onChange(of: isScanning) { _, scanning in
                 if scanning { self.parsed = nil }
+            }
+            // When switching tabs, make sure any sheets from ScanView are dismissed
+            // so History/Settings can appear full-screen.
+            .onDisappear {
+                isScanning = false
+                parsed = nil
+                showingPaste = false
             }
             .background(Color(.systemBackground))
         }
