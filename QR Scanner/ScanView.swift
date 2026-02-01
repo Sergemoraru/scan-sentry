@@ -5,6 +5,18 @@ import UIKit
 import PhotosUI
 import Vision
 
+struct VisualEffectBlur: UIViewRepresentable {
+    var style: UIBlurEffect.Style = .systemThinMaterial
+
+    func makeUIView(context: Context) -> UIVisualEffectView {
+        UIVisualEffectView(effect: UIBlurEffect(style: style))
+    }
+
+    func updateUIView(_ uiView: UIVisualEffectView, context: Context) {
+        uiView.effect = UIBlurEffect(style: style)
+    }
+}
+
 extension ParsedScan: Identifiable {
     var id: String { raw }
 }
@@ -40,6 +52,53 @@ struct ScanView: View {
                     }
                     .ignoresSafeArea()
 
+                    // Blurred mask around a clear scan window
+                    Color.clear
+                        .background(
+                            ZStack {
+                                // Full-screen blur
+                                VisualEffectBlur()
+                                    .ignoresSafeArea()
+                                    .mask(
+                                        GeometryReader { proxy in
+                                            let size = proxy.size
+                                            let boxWidth = min(size.width * 0.8, 320)
+                                            let boxHeight = boxWidth
+                                            let boxRect = CGRect(x: (size.width - boxWidth)/2,
+                                                                 y: (size.height - boxHeight)/2,
+                                                                 width: boxWidth,
+                                                                 height: boxHeight)
+
+                                            Canvas { context, _ in
+                                                // Start with fully opaque mask (blur visible)
+                                                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.white))
+                                                // Cut a transparent hole for the scan box (camera clear)
+                                                let rounded = Path(roundedRect: boxRect, cornerRadius: 20)
+                                                context.blendMode = .destinationOut
+                                                context.fill(rounded, with: .color(.black))
+                                            }
+                                        }
+                                    )
+
+                                // Scan window outline
+                                GeometryReader { proxy in
+                                    let size = proxy.size
+                                    let boxWidth = min(size.width * 0.8, 320)
+                                    let boxHeight = boxWidth
+                                    let rect = CGRect(x: (size.width - boxWidth)/2,
+                                                      y: (size.height - boxHeight)/2,
+                                                      width: boxWidth,
+                                                      height: boxHeight)
+
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .strokeBorder(.white.opacity(0.9), lineWidth: 2)
+                                        .frame(width: rect.width, height: rect.height)
+                                        .position(x: rect.midX, y: rect.midY)
+                                        .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 2)
+                                }
+                            }
+                        )
+
                     overlayUI
                 } else {
                     permissionUI
@@ -57,7 +116,6 @@ struct ScanView: View {
             .sheet(isPresented: $showingPaste) {
                 PasteSheet(pasteText: $pasteText) { pasteText in
                     showingPaste = false
-                    guard let pasteText else { return }
                     let parsed = ScanParser.parse(pasteText)
                     self.parsed = parsed
                 }
@@ -71,7 +129,7 @@ struct ScanView: View {
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                 cameraAuth = AVCaptureDevice.authorizationStatus(for: .video)
             }
-            .onChange(of: selectedPhoto) { newItem in
+            .onChange(of: selectedPhoto) { _, newItem in
                 guard let item = newItem else { return }
                 Task {
                     if let data = try? await item.loadTransferable(type: Data.self) {
@@ -80,46 +138,55 @@ struct ScanView: View {
                     selectedPhoto = nil
                 }
             }
-            .onChange(of: isScanning) { scanning in
+            .onChange(of: isScanning) { _, scanning in
                 if scanning { self.parsed = nil }
             }
         }
     }
 
     private var overlayUI: some View {
-        VStack {
-            // Top bar
-            HStack {
-                Button {
-                    showingPhotoPicker = true
-                } label: {
-                    Label("Photo", systemImage: "photo.on.rectangle")
+        VStack(spacing: 0) {
+            // Top controls outside camera area
+            VStack(spacing: 8) {
+                // Buttons row
+                HStack {
+                    Button {
+                        showingPhotoPicker = true
+                    } label: {
+                        Label("Photo", systemImage: "photo.on.rectangle")
+                    }
+                    .buttonStyle(.bordered)
+
+                    Spacer()
+
+                    Button("Paste") { showingPaste = true }
+                        .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.bordered)
+                .padding(.horizontal)
+                .padding(.top, 12)
 
-                Spacer()
+                // Info text below buttons
+                HStack {
+                    Text("Does not auto‑open links.")
+                        .font(.headline)
+                    Spacer(minLength: 12)
+                }
+                .padding(.horizontal)
 
-                Button("Paste") { showingPaste = true }
-                    .buttonStyle(.borderedProminent)
+                HStack {
+                    Text("Scan → review → then open/copy/share.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 12)
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 8)
             }
-            .padding(.horizontal)
-            .padding(.top, 12)
+            .background(.ultraThinMaterial)
 
             Spacer()
 
-            // Info text centered above bottom controls
-            VStack(spacing: 10) {
-                Text("Does not auto‑open links.")
-                    .font(.headline)
-                Text("Scan → review → then open/copy/share.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .padding()
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-
-            // Bottom bar
+            // Bottom controls outside camera area
             HStack {
                 Spacer()
                 Button {
