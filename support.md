@@ -4,8 +4,7 @@ Scan Sentry — Support
 Thanks for using Scan Sentry.
 
 Contact Support
-Email: sergemoraru@gmail.com
-(If you prefer a different support email, tell me and I’ll swap it.)
+Email: team@tsm-digital.com
 
 Frequently Asked Questions
 How do I scan a QR code?
@@ -29,7 +28,8 @@ If “Save scans to History” is enabled, scan results are stored locally on yo
 Does Scan Sentry automatically open links?
 No. The app shows a review screen first. You choose whether to open the link.
 The app says a link is risky — what does that mean?
-Scan Sentry checks for common indicators of suspicious links (for example: unusual domains, encoded paths, or known tracking patterns). It’s a warning, not a guarantee—use caution before opening unknown links.
+Scan Sentry checks for common indicators of suspicious links (for example: unusual domains, encoded paths, or known tracking patterns). 
+It’s a warning, not a guarantee—use caution before opening unknown links.
 
 Report a Bug
 When emailing support, please include:
