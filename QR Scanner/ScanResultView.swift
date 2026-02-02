@@ -14,9 +14,34 @@ struct ScanResultView: View {
     let parsed: ParsedScan
     let confirmBeforeOpen: Bool
 
+    private var urlReport: URLRiskReport? {
+        guard parsed.kind == .url, let url = parsed.normalizedURL else { return nil }
+        return URLRiskAnalyzer.analyze(url, raw: parsed.raw, aggressive: aggressive)
+    }
+
     var body: some View {
         NavigationStack {
             Form {
+                if let report = urlReport {
+                    Section {
+                        HStack(spacing: 10) {
+                            RiskBadge(level: report.level)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Review before opening")
+                                    .font(.headline)
+                                if let url = parsed.normalizedURL {
+                                    Text(url.host ?? url.absoluteString)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+
                 Section("Type") {
                     HStack {
                         Text("Detected")
@@ -34,14 +59,6 @@ struct ScanResultView: View {
                     Text(parsed.raw)
                         .textSelection(.enabled)
 
-                    Button("Copy") {
-                        UIPasteboard.general.string = parsed.raw
-                    }
-
-                    ShareLink(item: parsed.raw) {
-                        Text("Share")
-                    }
-                    
                     if parsed.kind == .wifi, let wifi = ScanParser.parseWiFi(parsed.raw) {
                         Button {
                             joinWiFi(wifi)
@@ -52,6 +69,27 @@ struct ScanResultView: View {
                 }
             }
             .navigationTitle("Review")
+            .toolbar {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if parsed.kind == .url, let url = parsed.normalizedURL {
+                        Button {
+                            UIPasteboard.general.string = URLSanitizer.sanitized(url).absoluteString
+                        } label: {
+                            Label("Copy Sanitized", systemImage: "link.badge.plus")
+                        }
+                    }
+
+                    Button {
+                        UIPasteboard.general.string = parsed.raw
+                    } label: {
+                        Label("Copy", systemImage: "doc.on.doc")
+                    }
+
+                    ShareLink(item: parsed.raw) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                }
+            }
             .alert(wifiAlert?.title ?? "", isPresented: .init(get: { wifiAlert != nil }, set: { if !$0 { wifiAlert = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -124,6 +162,12 @@ struct ScanResultView: View {
             } label: {
                 Label("Open In‑App", systemImage: "safari")
             }
+
+            Button {
+                UIPasteboard.general.string = URLSanitizer.sanitized(url).absoluteString
+            } label: {
+                Label("Copy Sanitized URL", systemImage: "link.badge.plus")
+            }
         }
     }
 
@@ -166,6 +210,37 @@ struct ScanResultView: View {
                 }
             }
         }
+    }
+}
+
+private struct RiskBadge: View {
+    let level: RiskLevel
+
+    private var title: String {
+        switch level {
+        case .low: return "LOW"
+        case .medium: return "MEDIUM"
+        case .high: return "HIGH"
+        }
+    }
+
+    private var color: Color {
+        switch level {
+        case .low: return .green
+        case .medium: return .orange
+        case .high: return .red
+        }
+    }
+
+    var body: some View {
+        Text(title)
+            .font(.caption.weight(.bold))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(color.opacity(0.18), in: Capsule())
+            .overlay(Capsule().strokeBorder(color.opacity(0.35)))
+            .foregroundStyle(color)
+            .accessibilityLabel("Risk \(level.rawValue)")
     }
 }
 
