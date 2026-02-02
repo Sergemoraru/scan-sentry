@@ -145,6 +145,8 @@ struct HistoryView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Color(.systemBackground))
             .navigationTitle("History")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText)

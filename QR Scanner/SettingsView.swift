@@ -49,8 +49,11 @@ struct SettingsView: View {
                     Text("About")
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Color(.systemBackground))
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
         }
+        .background(Color(.systemBackground))
     }
 }
