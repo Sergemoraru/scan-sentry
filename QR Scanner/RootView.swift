@@ -8,8 +8,14 @@ struct RootView: View {
         appearance.configureWithTransparentBackground()
         appearance.backgroundEffect = nil
         appearance.backgroundColor = .clear
+
+        // Also remove the default shadow line.
+        appearance.shadowColor = .clear
+        appearance.shadowImage = UIImage()
+
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
+        UITabBar.appearance().isTranslucent = true
     }
 
     var body: some View {

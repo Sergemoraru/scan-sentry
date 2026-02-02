@@ -45,83 +45,85 @@ struct ScanView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                // Never show white on the Scan tab.
-                Color.black.ignoresSafeArea()
+            GeometryReader { proxy in
+                let size = proxy.size
+                let safe = proxy.safeAreaInsets
 
-                if cameraAuth == .authorized {
-                    GeometryReader { proxy in
-                        let size = proxy.size
-                        let safe = proxy.safeAreaInsets
+                // Visible scan box size.
+                let boxWidth = min(size.width * 0.8, 320.0)
+                let boxHeight = boxWidth
 
-                        // Visible scan box size.
-                        let boxWidth = min(size.width * 0.8, 320.0)
-                        let boxHeight = boxWidth
+                // Center the scan box within the full screen, but leave room for the overlays.
+                // IMPORTANT: we do NOT use safeAreaInset because it shrinks the underlying content
+                // (which is what created the white slab under the tab bar).
+                let topOverlayApprox: CGFloat = 110
+                let bottomOverlayApprox: CGFloat = 110
+                let usableHeight = max(0, size.height - safe.top - safe.bottom - topOverlayApprox - bottomOverlayApprox)
+                let boxY = safe.top + topOverlayApprox + max(0, (usableHeight - boxHeight) / 2) + (boxHeight / 2)
 
-                        // Keep the box centered between top safe area and tab bar safe area.
-                        // (TabView reduces the available safe area automatically.)
-                        let availableTop = safe.top + 86 // approx height of top overlay
-                        let availableBottom = safe.bottom + 120 // approx space for bottom overlays
-                        let usableHeight = max(0, size.height - availableTop - availableBottom)
-                        let boxY = availableTop + max(0, (usableHeight - boxHeight) / 2) + (boxHeight / 2)
+                let boxRect = CGRect(
+                    x: (size.width - boxWidth) / 2,
+                    y: boxY - boxHeight / 2,
+                    width: boxWidth,
+                    height: boxHeight
+                )
 
-                        let boxRect = CGRect(
-                            x: (size.width - boxWidth) / 2,
-                            y: boxY - boxHeight / 2,
-                            width: boxWidth,
-                            height: boxHeight
-                        )
+                ZStack {
+                    // Never show white on the Scan tab.
+                    Color.black.ignoresSafeArea()
 
-                        ZStack {
-                            // Full-bleed camera behind everything.
-                            CameraScannerView(
-                                isScanning: $isScanning,
-                                isTorchOn: $isTorchOn,
-                                regionOfInterest: boxRect
-                            ) { value, symbology in
-                                handleScan(value, symbology: symbology)
-                            } onLowLightChanged: { isLow in
-                                lowLightHint = isLow
-                            }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .background(Color.black)
-                            .ignoresSafeArea()
-
-                            // Darken outside the scan box.
-                            Color.black.opacity(0.35)
-                                .mask(
-                                    Canvas { context, _ in
-                                        context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.white))
-                                        let rounded = Path(roundedRect: boxRect, cornerRadius: 20)
-                                        context.blendMode = .destinationOut
-                                        context.fill(rounded, with: .color(.black))
-                                    }
-                                )
-                                .allowsHitTesting(false)
-
-                            // Scan frame overlay.
-                            RoundedRectangle(cornerRadius: 20)
-                                .strokeBorder(.white.opacity(0.9), lineWidth: 2)
-                                .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 4)
-                                .frame(width: boxRect.width, height: boxRect.height)
-                                .position(x: boxRect.midX, y: boxRect.midY)
-                                .allowsHitTesting(false)
+                    if cameraAuth == .authorized {
+                        // Full-bleed camera behind everything (including behind the tab bar).
+                        CameraScannerView(
+                            isScanning: $isScanning,
+                            isTorchOn: $isTorchOn,
+                            regionOfInterest: boxRect
+                        ) { value, symbology in
+                            handleScan(value, symbology: symbology)
+                        } onLowLightChanged: { isLow in
+                            lowLightHint = isLow
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color.black)
+                        .ignoresSafeArea()
+
+                        // Dim outside the scan box.
+                        Color.black.opacity(0.35)
+                            .mask(
+                                Canvas { context, _ in
+                                    context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.white))
+                                    let rounded = Path(roundedRect: boxRect, cornerRadius: 20)
+                                    context.blendMode = .destinationOut
+                                    context.fill(rounded, with: .color(.black))
+                                }
+                            )
+                            .allowsHitTesting(false)
+
+                        // Scan frame overlay.
+                        RoundedRectangle(cornerRadius: 20)
+                            .strokeBorder(.white.opacity(0.9), lineWidth: 2)
+                            .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 4)
+                            .frame(width: boxRect.width, height: boxRect.height)
+                            .position(x: boxRect.midX, y: boxRect.midY)
+                            .allowsHitTesting(false)
+
+                        // Top overlay pinned to top safe area.
+                        topOverlay
+                            .frame(maxWidth: .infinity, alignment: .top)
+                            .padding(.top, 0)
+                            .ignoresSafeArea(.container, edges: .top)
+
+                        // Bottom overlay pinned above the tab bar safe area.
+                        bottomOverlay
+                            .frame(maxWidth: .infinity, alignment: .bottom)
+                            .padding(.bottom, 0)
+                            .ignoresSafeArea(.container, edges: .bottom)
+                    } else {
+                        permissionUI
                     }
-                } else {
-                    permissionUI
                 }
             }
-            // Top overlay pinned to top safe area.
-            .safeAreaInset(edge: .top, spacing: 0) {
-                topOverlay
-            }
-            // Bottom overlay pinned above tab bar (safe area already accounts for it).
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                bottomOverlay
-            }
             .sheet(item: $parsed, onDismiss: {
-                // Cooldown before resuming scanning
                 let cooldown: TimeInterval = 3.0
                 DispatchQueue.main.asyncAfter(deadline: .now() + cooldown) {
                     isScanning = true
@@ -157,7 +159,6 @@ struct ScanView: View {
                 }
             }
             .onDisappear {
-                // Ensure Scan sheets don't linger when switching tabs.
                 isScanning = false
                 parsed = nil
                 showingPaste = false
