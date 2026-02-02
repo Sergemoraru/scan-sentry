@@ -36,6 +36,7 @@ struct HistoryView: View {
     @State private var searchText = ""
     @State private var selectedKindRaw: String? = nil
     @State private var dateFilter: DateFilter = .all
+    @State private var favoritesOnly: Bool = false
 
     @State private var showClearConfirm = false
     @State private var showShare = false
@@ -53,6 +54,10 @@ struct HistoryView: View {
 
         if let kind = selectedKindRaw, kindOptions.contains(kind) {
             result = result.filter { $0.kindRaw == kind }
+        }
+
+        if favoritesOnly {
+            result = result.filter { $0.isFavorite }
         }
 
         if let cutoff = dateFilter.cutoffDate {
@@ -166,6 +171,12 @@ struct HistoryView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        Toggle(isOn: $favoritesOnly) {
+                            Label("Favorites only", systemImage: favoritesOnly ? "star.fill" : "star")
+                        }
+
+                        Divider()
+
                         Picker("Kind", selection: $selectedKindRaw) {
                             Text("All").tag(nil as String?)
                             ForEach(kindOptions, id: \.self) { kind in
@@ -181,6 +192,35 @@ struct HistoryView: View {
                         Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
                     }
                 }
+
+                ToolbarItemGroup(placement: .bottomBar) {
+                    if editMode == .active {
+                        Text(selection.isEmpty ? "Select items" : "\(selection.count) selected")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+
+                        Button {
+                            copySelected()
+                        } label: {
+                            Label("Copy", systemImage: "doc.on.doc")
+                        }
+                        .disabled(selection.isEmpty)
+
+                        Button {
+                            shareSelected()
+                        } label: {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                        }
+                        .disabled(selection.isEmpty)
+
+                        Button(role: .destructive) {
+                            deleteSelected()
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                        .disabled(selection.isEmpty)
+                    }
+                }
             }
             .confirmationDialog("Delete all history?", isPresented: $showClearConfirm, titleVisibility: .visible) {
                 Button("Delete All", role: .destructive) {
@@ -193,6 +233,22 @@ struct HistoryView: View {
             }
             .environment(\.editMode, $editMode)
         }
+    }
+
+    private var selectedRecords: [ScanRecord] {
+        let ids = selection
+        return scans.filter { ids.contains(ObjectIdentifier($0)) }
+    }
+
+    private func copySelected() {
+        let lines = selectedRecords.map { $0.rawValue }
+        UIPasteboard.general.string = lines.joined(separator: "\n")
+    }
+
+    private func shareSelected() {
+        let lines = selectedRecords.map { $0.rawValue }
+        shareText = lines.joined(separator: "\n")
+        showShare = true
     }
 
     private func deleteSelected() {
