@@ -43,7 +43,6 @@ We may update this Privacy Policy from time to time. Any changes will be posted 
 
 Contact
 If you have questions about this Privacy Policy, contact:
-Sergey Moraru
 team@tsm-digital.com
 
 ---
