@@ -55,6 +55,7 @@ struct ScanView: View {
 
     @State private var cameraAuth = AVCaptureDevice.authorizationStatus(for: .video)
     @State private var isTorchOn = false
+    @State private var lowLightHint = false
 
     @State private var showingPhotoPicker = false
     @State private var selectedPhoto: PhotosPickerItem? = nil
@@ -106,18 +107,35 @@ struct ScanView: View {
                                     }
                                 )
 
-                            // Camera feed clipped to the scan box
-                            CameraScannerView(isScanning: $isScanning, isTorchOn: $isTorchOn) { value, symbology in
+                            // Camera feed fills the screen.
+                            // We set rectOfInterest to match the visible scan box.
+                            CameraScannerView(
+                                isScanning: $isScanning,
+                                isTorchOn: $isTorchOn,
+                                regionOfInterest: boxRect
+                            ) { value, symbology in
                                 handleScan(value, symbology: symbology)
+                            } onLowLightChanged: { isLow in
+                                lowLightHint = isLow
                             }
-                            .frame(width: boxRect.width, height: boxRect.height)
-                            .clipShape(RoundedRectangle(cornerRadius: 20))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .strokeBorder(.white.opacity(0.9), lineWidth: 2)
-                                    .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 2)
-                            )
-                            .position(x: boxRect.midX, y: boxRect.midY)
+                            .ignoresSafeArea()
+
+                            // Visible scan box border
+                            RoundedRectangle(cornerRadius: 20)
+                                .strokeBorder(.white.opacity(0.9), lineWidth: 2)
+                                .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 2)
+                                .frame(width: boxRect.width, height: boxRect.height)
+                                .position(x: boxRect.midX, y: boxRect.midY)
+
+                            if lowLightHint && !isTorchOn {
+                                Text("Low light — try the flashlight")
+                                    .font(.subheadline.weight(.semibold))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(.ultraThinMaterial, in: Capsule())
+                                    .overlay(Capsule().strokeBorder(.white.opacity(0.15)))
+                                    .position(x: boxRect.midX, y: min(size.height - availableBottom - 20, boxRect.maxY + 28))
+                            }
 
                             // Top bar pinned to the top edge
                             VStack(spacing: 0) {

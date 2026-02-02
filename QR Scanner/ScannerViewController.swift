@@ -3,6 +3,16 @@ import AVFoundation
 
 final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
     var onScan: ((String, String?) -> Void)?
+    var onLowLightChanged: ((Bool) -> Void)?
+
+    /// Region of interest in this view's coordinate space.
+    /// Set by the SwiftUI layer to match the visible scan box.
+    var regionOfInterest: CGRect? = nil {
+        didSet {
+            // Update on the next layout pass.
+            if isViewLoaded { setRegionOfInterest() }
+        }
+    }
 
     private let session = AVCaptureSession()
     private var previewLayer: AVCaptureVideoPreviewLayer?
@@ -12,7 +22,11 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
 
     private let overlayLayer = CAShapeLayer()
     private let reticleLayer = CAShapeLayer()
+    private let focusLayer = CAShapeLayer()
     private var metadataOutput: AVCaptureMetadataOutput?
+
+    private var lowLightTimer: DispatchSourceTimer?
+    private var lastLowLight: Bool? = nil
 
     func setTorch(_ on: Bool) {
         guard let device = AVCaptureDevice.default(for: .video), device.hasTorch else { return }
@@ -35,11 +49,18 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
         overlayLayer.lineWidth = 2
         view.layer.addSublayer(overlayLayer)
 
-        reticleLayer.strokeColor = UIColor.white.withAlphaComponent(0.8).cgColor
+        reticleLayer.strokeColor = UIColor.white.withAlphaComponent(0.0).cgColor
         reticleLayer.fillColor = UIColor.clear.cgColor
         reticleLayer.lineDashPattern = [6, 6]
         reticleLayer.lineWidth = 1.5
         view.layer.addSublayer(reticleLayer)
+
+        // Focus indicator (tap-to-focus)
+        focusLayer.strokeColor = UIColor.systemYellow.withAlphaComponent(0.95).cgColor
+        focusLayer.fillColor = UIColor.clear.cgColor
+        focusLayer.lineWidth = 2
+        focusLayer.opacity = 0
+        view.layer.addSublayer(focusLayer)
 
         // Gestures: pinch to zoom, tap to focus/expose
         let pinch = UIPinchGestureRecognizer(target: self, action: #selector(handlePinch(_:)))
@@ -57,6 +78,7 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
         guard configured, !isRunning else { return }
         isRunning = true
         DispatchQueue.main.async { self.overlayLayer.path = nil }
+        startLowLightMonitoring()
         DispatchQueue.global(qos: .userInitiated).async {
             self.session.startRunning()
         }
@@ -66,6 +88,7 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
         guard isRunning else { return }
         isRunning = false
         DispatchQueue.main.async { self.overlayLayer.path = nil }
+        stopLowLightMonitoring()
         DispatchQueue.global(qos: .userInitiated).async {
             self.session.stopRunning()
         }
@@ -133,17 +156,57 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
 
     private func setRegionOfInterest() {
         guard let preview = previewLayer, let output = metadataOutput else { return }
+
         let bounds = view.bounds
-        // Use a larger ROI to improve detection reliability in a small preview.
-        let side = min(bounds.width, bounds.height) * 0.9
-        let roi = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
+        let roi: CGRect
+        if let provided = regionOfInterest, provided.width > 0, provided.height > 0 {
+            // Clamp to the preview bounds in case SwiftUI provided something slightly out-of-bounds.
+            roi = provided.intersection(bounds)
+        } else {
+            // Default ROI: centered square, slightly inset.
+            let side = min(bounds.width, bounds.height) * 0.8
+            roi = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
+        }
 
         let metadataRect = preview.metadataOutputRectConverted(fromLayerRect: roi)
         output.rectOfInterest = metadataRect
 
-        // Update reticle path to show the ROI to the user
+        // Reticle path (kept for debugging; SwiftUI draws the visible scan box)
         let path = UIBezierPath(roundedRect: roi, cornerRadius: 12)
         reticleLayer.path = path.cgPath
+    }
+
+    private func startLowLightMonitoring() {
+        stopLowLightMonitoring()
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + 0.2, repeating: 0.6)
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            self.updateLowLightHint()
+        }
+        self.lowLightTimer = timer
+        timer.resume()
+    }
+
+    private func stopLowLightMonitoring() {
+        lowLightTimer?.cancel()
+        lowLightTimer = nil
+        lastLowLight = nil
+        onLowLightChanged?(false)
+    }
+
+    private func updateLowLightHint() {
+        guard let device = AVCaptureDevice.default(for: .video) else {
+            if lastLowLight != false { lastLowLight = false; onLowLightChanged?(false) }
+            return
+        }
+        // exposureTargetOffset is negative when the camera is underexposed.
+        // Threshold chosen empirically; keep conservative to avoid nagging.
+        let isLow = device.exposureTargetOffset < -0.75
+        if lastLowLight != isLow {
+            lastLowLight = isLow
+            onLowLightChanged?(isLow)
+        }
     }
 
     @objc private func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
@@ -181,6 +244,37 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
         } catch {
             // Ignore focus/exposure errors
         }
+
+        showFocusIndicator(at: point)
+    }
+
+    private func showFocusIndicator(at point: CGPoint) {
+        let size: CGFloat = 72
+        let rect = CGRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)
+        focusLayer.path = UIBezierPath(roundedRect: rect, cornerRadius: 12).cgPath
+
+        focusLayer.removeAllAnimations()
+        focusLayer.opacity = 1
+
+        let scale = CABasicAnimation(keyPath: "transform.scale")
+        scale.fromValue = 1.15
+        scale.toValue = 1.0
+        scale.duration = 0.18
+        scale.timingFunction = CAMediaTimingFunction(name: .easeOut)
+
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 1
+        fade.toValue = 0
+        fade.duration = 0.65
+        fade.beginTime = CACurrentMediaTime() + 0.12
+        fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+
+        let group = CAAnimationGroup()
+        group.animations = [scale, fade]
+        group.duration = fade.beginTime - CACurrentMediaTime() + fade.duration
+        group.isRemovedOnCompletion = false
+        group.fillMode = .forwards
+        focusLayer.add(group, forKey: "focus")
     }
 
     override func viewDidLayoutSubviews() {
