@@ -3,13 +3,14 @@ import UIKit
 
 struct RootView: View {
     init() {
-        // Force the iOS tab bar to be transparent so the camera shows behind it.
+        // Force the iOS tab bar to be transparent / minimally translucent so the camera shows behind it.
         let appearance = UITabBarAppearance()
         appearance.configureWithTransparentBackground()
-        appearance.backgroundEffect = nil
+        // Use a dark material instead of nil to avoid iOS drawing an opaque/white fallback.
+        appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
         appearance.backgroundColor = .clear
 
-        // Also remove the default shadow line.
+        // Remove the default shadow line.
         appearance.shadowColor = .clear
         appearance.shadowImage = UIImage()
 

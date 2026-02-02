@@ -45,32 +45,30 @@ struct ScanView: View {
 
     var body: some View {
         NavigationStack {
-            GeometryReader { proxy in
-                let size = proxy.size
-                let safe = proxy.safeAreaInsets
+            ZStack {
+                // Base background for the entire tab, including under the tab bar.
+                Color.black.ignoresSafeArea()
 
-                // Visible scan box size.
-                let boxWidth = min(size.width * 0.8, 320.0)
-                let boxHeight = boxWidth
+                GeometryReader { proxy in
+                    let size = proxy.size
+                    let safe = proxy.safeAreaInsets
 
-                // Center the scan box within the full screen, but leave room for the overlays.
-                // IMPORTANT: we do NOT use safeAreaInset because it shrinks the underlying content
-                // (which is what created the white slab under the tab bar).
-                let topOverlayApprox: CGFloat = 110
-                let bottomOverlayApprox: CGFloat = 110
-                let usableHeight = max(0, size.height - safe.top - safe.bottom - topOverlayApprox - bottomOverlayApprox)
-                let boxY = safe.top + topOverlayApprox + max(0, (usableHeight - boxHeight) / 2) + (boxHeight / 2)
+                    // Visible scan box size.
+                    let boxWidth = min(size.width * 0.8, 320.0)
+                    let boxHeight = boxWidth
 
-                let boxRect = CGRect(
-                    x: (size.width - boxWidth) / 2,
-                    y: boxY - boxHeight / 2,
-                    width: boxWidth,
-                    height: boxHeight
-                )
+                    // Center the scan box within the full screen, but leave room for the overlays.
+                    let topOverlayApprox: CGFloat = 120
+                    let bottomOverlayApprox: CGFloat = 130
+                    let usableHeight = max(0, size.height - safe.top - safe.bottom - topOverlayApprox - bottomOverlayApprox)
+                    let boxY = safe.top + topOverlayApprox + max(0, (usableHeight - boxHeight) / 2) + (boxHeight / 2)
 
-                ZStack {
-                    // Never show white on the Scan tab.
-                    Color.black.ignoresSafeArea()
+                    let boxRect = CGRect(
+                        x: (size.width - boxWidth) / 2,
+                        y: boxY - boxHeight / 2,
+                        width: boxWidth,
+                        height: boxHeight
+                    )
 
                     if cameraAuth == .authorized {
                         // Full-bleed camera behind everything (including behind the tab bar).
@@ -109,19 +107,19 @@ struct ScanView: View {
 
                         // Top overlay pinned to top safe area.
                         topOverlay
-                            .frame(maxWidth: .infinity, alignment: .top)
-                            .padding(.top, 0)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                             .ignoresSafeArea(.container, edges: .top)
 
-                        // Bottom overlay pinned above the tab bar safe area.
+                        // Bottom overlay pinned above the tab bar.
                         bottomOverlay
-                            .frame(maxWidth: .infinity, alignment: .bottom)
-                            .padding(.bottom, 0)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                             .ignoresSafeArea(.container, edges: .bottom)
                     } else {
                         permissionUI
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
+                .ignoresSafeArea() // do not let GeometryReader be constrained by the tab bar
             }
             .sheet(item: $parsed, onDismiss: {
                 let cooldown: TimeInterval = 3.0
