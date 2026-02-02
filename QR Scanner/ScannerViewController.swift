@@ -146,7 +146,6 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
 
         let preview = AVCaptureVideoPreviewLayer(session: session)
         preview.videoGravity = .resizeAspectFill
-        // Respect the container view's bounds (SwiftUI may size this view)
         preview.frame = view.bounds
         view.layer.insertSublayer(preview, at: 0)
         previewLayer = preview
@@ -279,9 +278,7 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        // Respect the container view's bounds (SwiftUI may size this view)
         previewLayer?.frame = view.bounds
-        setRegionOfInterest()
     }
 
     func metadataOutput(_ output: AVCaptureMetadataOutput,

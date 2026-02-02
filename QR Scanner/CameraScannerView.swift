@@ -13,6 +13,8 @@ struct CameraScannerView: UIViewControllerRepresentable {
     var onLowLightChanged: ((Bool) -> Void)? = nil
     var onRequestOpenSettings: (() -> Void)? = nil
 
+    typealias UIViewControllerType = ScannerViewController
+
     class Coordinator {
         var parent: CameraScannerView
         init(parent: CameraScannerView) { self.parent = parent }
@@ -24,6 +26,7 @@ struct CameraScannerView: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> ScannerViewController {
         let vc = ScannerViewController()
+        vc.view.backgroundColor = .black
         vc.onScan = onScan
         vc.onLowLightChanged = onLowLightChanged
         return vc
@@ -41,3 +44,5 @@ struct CameraScannerView: UIViewControllerRepresentable {
         uiViewController.setTorch(isTorchOn)
     }
 }
+// Usage hint: when using CameraScannerView in SwiftUI, consider applying `.frame(...)` modifier to ensure full-bleed appearance.
+

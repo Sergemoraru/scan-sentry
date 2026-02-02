@@ -5,20 +5,6 @@ import UIKit
 import PhotosUI
 import Vision
 
-private struct TopBarHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
-private struct FlashHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
 struct VisualEffectBlur: UIViewRepresentable {
     var style: UIBlurEffect.Style = .systemThinMaterial
 
@@ -36,9 +22,6 @@ extension ParsedScan: Identifiable {
 }
 
 struct ScanView: View {
-    /// Space reserved at the bottom for the custom tab bar (and its offset),
-    /// so the scan window never sits behind it.
-    var bottomReserved: CGFloat = 0
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
     @AppStorage("saveToHistory") private var saveToHistory: Bool = true
@@ -59,33 +42,29 @@ struct ScanView: View {
 
     @State private var showingPhotoPicker = false
     @State private var selectedPhoto: PhotosPickerItem? = nil
-    @State private var pickedImageData: Data? = nil
-
-    @State private var topBarHeight: CGFloat = 0
-    @State private var flashHeight: CGFloat = 0
 
     var body: some View {
         NavigationStack {
             ZStack {
+                // Never show white on the Scan tab.
+                Color.black.ignoresSafeArea()
+
                 if cameraAuth == .authorized {
-                    // Camera area fills the screen; controls are separate "bars" pinned
-                    // to the top/bottom safe areas (not inside the camera box).
                     GeometryReader { proxy in
                         let size = proxy.size
                         let safe = proxy.safeAreaInsets
-                        let availableTop = safe.top + topBarHeight
 
-                        // Reserve space for the custom bottom tab bar + the flashlight button
-                        // so the scan window never sits behind them.
-                        // Extra breathing room so the flashlight/menu never overlaps the scan window.
-                        let availableBottom = safe.bottom + bottomReserved + flashHeight + 36
-
+                        // Visible scan box size.
                         let boxWidth = min(size.width * 0.8, 320.0)
                         let boxHeight = boxWidth
 
-                        // Center the scan box within the space between the top bar and the bottom reserved area.
+                        // Keep the box centered between top safe area and tab bar safe area.
+                        // (TabView reduces the available safe area automatically.)
+                        let availableTop = safe.top + 86 // approx height of top overlay
+                        let availableBottom = safe.bottom + 120 // approx space for bottom overlays
                         let usableHeight = max(0, size.height - availableTop - availableBottom)
                         let boxY = availableTop + max(0, (usableHeight - boxHeight) / 2) + (boxHeight / 2)
+
                         let boxRect = CGRect(
                             x: (size.width - boxWidth) / 2,
                             y: boxY - boxHeight / 2,
@@ -94,21 +73,7 @@ struct ScanView: View {
                         )
 
                         ZStack {
-                            Color(.systemBackground)
-
-                            // Dim everything outside the scan box with a cut-out hole
-                            Color.black.opacity(0.35)
-                                .mask(
-                                    Canvas { context, _ in
-                                        context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.white))
-                                        let rounded = Path(roundedRect: boxRect, cornerRadius: 20)
-                                        context.blendMode = .destinationOut
-                                        context.fill(rounded, with: .color(.black))
-                                    }
-                                )
-
-                            // Camera feed fills the screen.
-                            // We set rectOfInterest to match the visible scan box.
+                            // Full-bleed camera behind everything.
                             CameraScannerView(
                                 isScanning: $isScanning,
                                 isTorchOn: $isTorchOn,
@@ -118,59 +83,42 @@ struct ScanView: View {
                             } onLowLightChanged: { isLow in
                                 lowLightHint = isLow
                             }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .background(Color.black)
                             .ignoresSafeArea()
 
-                            // Visible scan box border
+                            // Darken outside the scan box.
+                            Color.black.opacity(0.35)
+                                .mask(
+                                    Canvas { context, _ in
+                                        context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.white))
+                                        let rounded = Path(roundedRect: boxRect, cornerRadius: 20)
+                                        context.blendMode = .destinationOut
+                                        context.fill(rounded, with: .color(.black))
+                                    }
+                                )
+                                .allowsHitTesting(false)
+
+                            // Scan frame overlay.
                             RoundedRectangle(cornerRadius: 20)
                                 .strokeBorder(.white.opacity(0.9), lineWidth: 2)
-                                .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 2)
+                                .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 4)
                                 .frame(width: boxRect.width, height: boxRect.height)
                                 .position(x: boxRect.midX, y: boxRect.midY)
-
-                            if lowLightHint && !isTorchOn {
-                                Text("Low light — try the flashlight")
-                                    .font(.subheadline.weight(.semibold))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(.ultraThinMaterial, in: Capsule())
-                                    .overlay(Capsule().strokeBorder(.white.opacity(0.15)))
-                                    .position(x: boxRect.midX, y: min(size.height - availableBottom - 20, boxRect.maxY + 28))
-                            }
-
-                            // Top bar pinned to the top edge
-                            VStack(spacing: 0) {
-                                topControls
-                                    .background(
-                                        GeometryReader { g in
-                                            Color.clear
-                                                .preference(key: TopBarHeightKey.self, value: g.size.height)
-                                        }
-                                    )
-                                    .onPreferenceChange(TopBarHeightKey.self) { topBarHeight = $0 }
-                                Spacer(minLength: 0)
-                            }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-
-                            // Flashlight button pinned above the custom tab bar
-                            VStack(spacing: 0) {
-                                Spacer(minLength: 0)
-                                bottomControls
-                                    .background(
-                                        GeometryReader { g in
-                                            Color.clear
-                                                .preference(key: FlashHeightKey.self, value: g.size.height)
-                                        }
-                                    )
-                                    .onPreferenceChange(FlashHeightKey.self) { flashHeight = $0 }
-                                    .padding(.bottom, bottomReserved)
-                            }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                                .allowsHitTesting(false)
                         }
-                        .ignoresSafeArea()
                     }
                 } else {
                     permissionUI
                 }
+            }
+            // Top overlay pinned to top safe area.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                topOverlay
+            }
+            // Bottom overlay pinned above tab bar (safe area already accounts for it).
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                bottomOverlay
             }
             .sheet(item: $parsed, onDismiss: {
                 // Cooldown before resuming scanning
@@ -178,7 +126,6 @@ struct ScanView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + cooldown) {
                     isScanning = true
                 }
-                // Clear previous result so a new scan presents fresh
                 self.parsed = nil
             }) { parsed in
                 ScanResultView(parsed: parsed, confirmBeforeOpen: confirmBeforeOpen)
@@ -209,23 +156,17 @@ struct ScanView: View {
                     selectedPhoto = nil
                 }
             }
-            .onChange(of: isScanning) { _, scanning in
-                if scanning { self.parsed = nil }
-            }
-            // When switching tabs, make sure any sheets from ScanView are dismissed
-            // so History/Settings can appear full-screen.
             .onDisappear {
+                // Ensure Scan sheets don't linger when switching tabs.
                 isScanning = false
                 parsed = nil
                 showingPaste = false
             }
-            .background(Color(.systemBackground))
         }
     }
 
-    private var topControls: some View {
-        VStack(spacing: 8) {
-            // Buttons row
+    private var topOverlay: some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Button {
                     showingPhotoPicker = true
@@ -239,46 +180,51 @@ struct ScanView: View {
                 Button("Paste") { showingPaste = true }
                     .buttonStyle(.borderedProminent)
             }
-            .padding(.horizontal)
-            .padding(.top, 0)
 
-            // Info text below buttons
-            HStack {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("Does not auto‑open links.")
                     .font(.headline)
-                Spacer(minLength: 12)
-            }
-            .padding(.horizontal)
-
-            HStack {
                 Text("Scan → review → then open/copy/share.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Spacer(minLength: 12)
             }
-            .padding(.horizontal)
-            .padding(.bottom, 0)
         }
-        .background(Color(.systemBackground).ignoresSafeArea(.container, edges: .top))
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+        .background(.ultraThinMaterial)
         .overlay(Divider(), alignment: .bottom)
     }
 
-    private var bottomControls: some View {
-        HStack {
-            Spacer()
-            Button {
-                isTorchOn.toggle()
-            } label: {
-                Image(systemName: isTorchOn ? "flashlight.on.fill" : "flashlight.off.fill")
-                    .font(.title2)
-                    .padding()
-                    .background(.ultraThinMaterial, in: Circle())
+    private var bottomOverlay: some View {
+        VStack(spacing: 10) {
+            // Instruction chip (optional) pinned just above the tab bar.
+            if lowLightHint && !isTorchOn {
+                Text("Low light — try the flashlight")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.15)))
+            }
+
+            HStack {
+                Spacer()
+                Button {
+                    isTorchOn.toggle()
+                } label: {
+                    Image(systemName: isTorchOn ? "flashlight.on.fill" : "flashlight.off.fill")
+                        .font(.title2)
+                        .padding(14)
+                        .background(.ultraThinMaterial, in: Circle())
+                        .overlay(Circle().strokeBorder(.white.opacity(0.15)))
+                }
             }
         }
-        .padding(.horizontal)
-        .padding(.bottom, 0)
-        .background(Color(.systemBackground).ignoresSafeArea(.container, edges: .bottom))
-        .overlay(Divider(), alignment: .top)
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 10)
+        .background(Color.clear)
     }
 
     private var permissionUI: some View {
@@ -318,15 +264,12 @@ struct ScanView: View {
 
     @MainActor
     private func analyzePickedImageData(_ data: Data) async {
-        pickedImageData = data
         guard let uiImage = UIImage(data: data), let cgImage = uiImage.cgImage else { return }
 
         let request = VNDetectBarcodesRequest { request, _ in
             if let result = (request.results as? [VNBarcodeObservation])?.first,
                let payload = result.payloadStringValue {
                 handleScan(payload, symbology: result.symbology.rawValue)
-            } else {
-                // Optional: show a gentle alert/toast; for now, no-op
             }
         }
         request.symbologies = [.qr, .aztec, .dataMatrix, .pdf417, .code128, .code39, .ean13, .ean8, .upce]
@@ -362,4 +305,3 @@ struct ScanView: View {
         }
     }
 }
-
