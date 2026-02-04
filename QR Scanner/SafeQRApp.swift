@@ -7,6 +7,6 @@ struct SafeQRApp: App {
         WindowGroup {
             RootView()
         }
-        .modelContainer(for: ScanRecord.self)
+        .modelContainer(for: [ScanRecord.self, DocumentRecord.self])
     }
 }

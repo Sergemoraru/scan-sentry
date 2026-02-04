@@ -27,6 +27,9 @@ struct RootView: View {
             ScanView()
                 .tabItem { Label("Scan", systemImage: "qrcode.viewfinder") }
 
+            DocumentsListView()
+                .tabItem { Label("Documents", systemImage: "doc.text.viewfinder") }
+
             HistoryView()
                 .tabItem { Label("History", systemImage: "clock") }
 

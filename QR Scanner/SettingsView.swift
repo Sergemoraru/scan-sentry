@@ -120,6 +120,21 @@ struct HowToUseView: View {
             }
             
             Section {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Document Scanning", systemImage: "doc.text.viewfinder")
+                        .font(.headline)
+                         .foregroundStyle(.primary)
+                    
+                    Text("Use the Documents tab to scan physical documents. The app will automatically detect edges and crop them. You can save multi-page documents and export them as PDFs.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text("Document Scanner")
+            }
+            
+            Section {
                 Text("This app supports various formats including QR Code, Aztec, DataMatrix, PDF417, EAN-13, EAN-8, UPC-E, Code 39, and Code 128.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
