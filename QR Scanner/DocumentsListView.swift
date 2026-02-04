@@ -1,12 +1,25 @@
 import SwiftUI
 import SwiftData
+import UIKit
+
+private struct CropItem: Identifiable {
+    let id = UUID()
+    let image: UIImage
+}
 
 struct DocumentsListView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(SubscriptionManager.self) private var subscriptionManager
     @Query(sort: \DocumentRecord.createdAt, order: .reverse) private var documents: [DocumentRecord]
     
     @State private var showingScanner = false
+    @State private var showingPaywall = false
     @State private var selectedDocument: DocumentRecord?
+    
+    // Cropping flow state
+    @State private var imagesToCrop: [UIImage] = []
+    @State private var processedImages: [UIImage] = []
+    @State private var currentCropItem: CropItem?
     
     var body: some View {
         NavigationStack {
@@ -36,7 +49,11 @@ struct DocumentsListView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        showingScanner = true
+                        if subscriptionManager.canScanDocument {
+                            showingScanner = true
+                        } else {
+                            showingPaywall = true
+                        }
                     } label: {
                         Image(systemName: "plus")
                     }
@@ -44,8 +61,31 @@ struct DocumentsListView: View {
             }
             .sheet(isPresented: $showingScanner) {
                 DocumentScannerView { images in
-                    saveDocument(images: images)
+                    // Start cropping flow
+                    processedImages = []
+                    imagesToCrop = images
+                    nextCrop()
                 }
+            }
+            .fullScreenCover(item: $currentCropItem) { item in
+                DocumentCropView(image: item.image) { croppedImage in
+                    processedImages.append(croppedImage)
+                    currentCropItem = nil
+                    // Delay slightly to allow cover to dismiss before showing next
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        nextCrop()
+                    }
+                } onCancel: {
+                    // Keep original if user cancels crop for this page
+                    processedImages.append(item.image)
+                    currentCropItem = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        nextCrop()
+                    }
+                }
+            }
+            .sheet(isPresented: $showingPaywall) {
+                PaywallView()
             }
             .sheet(item: $selectedDocument) { doc in
                 DocumentDetailView(document: doc)
@@ -53,16 +93,31 @@ struct DocumentsListView: View {
         }
     }
     
+    private func nextCrop() {
+        if imagesToCrop.isEmpty {
+            // Done cropping; save and end flow
+            if !processedImages.isEmpty {
+                saveDocument(images: processedImages)
+            }
+            processedImages = []
+            showingScanner = false
+            return
+        }
+
+        let next = imagesToCrop.removeFirst()
+        currentCropItem = CropItem(image: next)
+    }
+
     private func saveDocument(images: [UIImage]) {
         guard !images.isEmpty else { return }
-        
+
         let fileManager = FileManager.default
         let documentsDir = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
         let docId = UUID()
         let docFolder = documentsDir.appendingPathComponent("ScannedDocs/\(docId.uuidString)", isDirectory: true)
-        
+
         try? fileManager.createDirectory(at: docFolder, withIntermediateDirectories: true)
-        
+
         var pagePaths: [String] = []
         for (index, image) in images.enumerated() {
             let fileName = "page_\(index).jpg"
@@ -72,14 +127,17 @@ struct DocumentsListView: View {
                 pagePaths.append(fileURL.path)
             }
         }
-        
+
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         let title = "Scan \(formatter.string(from: Date()))"
-        
+
         let record = DocumentRecord(title: title, pageImagePaths: pagePaths)
         modelContext.insert(record)
+
+        // Increment document count
+        subscriptionManager.documentCount += 1
     }
     
     private func deleteDocuments(at offsets: IndexSet) {

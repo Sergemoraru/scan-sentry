@@ -38,8 +38,11 @@ private struct BottomOverlayHeightKey: PreferenceKey {
 struct ScanView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
+    @Environment(SubscriptionManager.self) private var subscriptionManager
     @AppStorage("saveToHistory") private var saveToHistory: Bool = true
     @AppStorage("confirmBeforeOpen") private var confirmBeforeOpen: Bool = true
+    
+    @State private var showingPaywall = false
 
     @State private var isScanning = true
     @State private var lastScanValue: String?
@@ -88,7 +91,7 @@ struct ScanView: View {
                     )
 
                     if cameraAuth == .authorized {
-                        // Full-bleed camera behind everything (including behind the tab bar).
+                        // Camera preview clipped to the scan box only
                         CameraScannerView(
                             isScanning: $isScanning,
                             isTorchOn: $isTorchOn,
@@ -98,21 +101,9 @@ struct ScanView: View {
                         } onLowLightChanged: { isLow in
                             lowLightHint = isLow
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color.black)
-                        .ignoresSafeArea()
-
-                        // Dim outside the scan box.
-                        Color.black.opacity(0.35)
-                            .mask(
-                                Canvas { context, _ in
-                                    context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.white))
-                                    let rounded = Path(roundedRect: boxRect, cornerRadius: 20)
-                                    context.blendMode = .destinationOut
-                                    context.fill(rounded, with: .color(.black))
-                                }
-                            )
-                            .allowsHitTesting(false)
+                        .frame(width: boxRect.width, height: boxRect.height)
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                        .position(x: boxRect.midX, y: boxRect.midY)
 
                         // Scan frame overlay.
                         RoundedRectangle(cornerRadius: 20)
@@ -152,6 +143,14 @@ struct ScanView: View {
                 }
             }
             .photosPicker(isPresented: $showingPhotoPicker, selection: $selectedPhoto, matching: .images)
+            .sheet(isPresented: $showingPaywall, onDismiss: {
+                // Resume scanning if user dismissed without subscribing
+                if subscriptionManager.canScan {
+                    isScanning = true
+                }
+            }) {
+                PaywallView()
+            }
             .onAppear {
                 cameraAuth = AVCaptureDevice.authorizationStatus(for: .video)
                 if cameraAuth == .authorized { isScanning = true }
@@ -211,7 +210,7 @@ struct ScanView: View {
                 .buttonStyle(.borderedProminent)
         }
         .padding(.horizontal, 16)
-        .padding(.top, 0)
+        .padding(.top, 32)
         .padding(.bottom, 0)
     }
 
@@ -301,6 +300,13 @@ struct ScanView: View {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
+        // Check subscription limit
+        guard subscriptionManager.canScan else {
+            isScanning = false
+            showingPaywall = true
+            return
+        }
+
         // Simple dedupe throttle
         if let last = lastScanValue,
            let at = lastScanAt,
@@ -317,6 +323,9 @@ struct ScanView: View {
 
         let parsed = ScanParser.parse(trimmed)
         self.parsed = parsed
+
+        // Increment scan count
+        subscriptionManager.scanCount += 1
 
         if saveToHistory {
             let record = ScanRecord(rawValue: parsed.raw, kindRaw: parsed.kind.rawValue, symbology: symbology)
