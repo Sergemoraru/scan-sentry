@@ -21,6 +21,20 @@ extension ParsedScan: Identifiable {
     var id: String { raw }
 }
 
+private struct TopOverlayHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct BottomOverlayHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct ScanView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
@@ -43,6 +57,10 @@ struct ScanView: View {
     @State private var showingPhotoPicker = false
     @State private var selectedPhoto: PhotosPickerItem? = nil
 
+    @State private var topOverlayHeight: CGFloat = 0
+    @State private var bottomOverlayHeight: CGFloat = 0
+    @State private var topOverlayLift: CGFloat = 32
+ 
     var body: some View {
         NavigationStack {
             ZStack {
@@ -57,11 +75,10 @@ struct ScanView: View {
                     let boxWidth = min(size.width * 0.8, 320.0)
                     let boxHeight = boxWidth
 
-                    // Center the scan box within the full screen, but leave room for the overlays.
-                    let topOverlayApprox: CGFloat = 120
-                    let bottomOverlayApprox: CGFloat = 130
-                    let usableHeight = max(0, size.height - safe.top - safe.bottom - topOverlayApprox - bottomOverlayApprox)
-                    let boxY = safe.top + topOverlayApprox + max(0, (usableHeight - boxHeight) / 2) + (boxHeight / 2)
+                    // Center the scan box within the full screen, but leave room for the measured overlays.
+                    let effectiveTop = max(0, topOverlayHeight - topOverlayLift)
+                    let usableHeight = max(0, size.height - safe.top - safe.bottom - effectiveTop - bottomOverlayHeight)
+                    let boxY = safe.top + effectiveTop + max(0, (usableHeight - boxHeight) / 2) + (boxHeight / 2)
 
                     let boxRect = CGRect(
                         x: (size.width - boxWidth) / 2,
@@ -106,14 +123,10 @@ struct ScanView: View {
                             .allowsHitTesting(false)
 
                         // Top overlay pinned to top safe area.
-                        topOverlay
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                            .ignoresSafeArea(.container, edges: .top)
+                        // REMOVED per instructions
 
                         // Bottom overlay pinned above the tab bar.
-                        bottomOverlay
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                            .ignoresSafeArea(.container, edges: .bottom)
+                        // REMOVED per instructions
                     } else {
                         permissionUI
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -122,7 +135,7 @@ struct ScanView: View {
                 .ignoresSafeArea() // do not let GeometryReader be constrained by the tab bar
             }
             .sheet(item: $parsed, onDismiss: {
-                let cooldown: TimeInterval = 3.0
+                let cooldown: TimeInterval = 2.0
                 DispatchQueue.main.asyncAfter(deadline: .now() + cooldown) {
                     isScanning = true
                 }
@@ -161,42 +174,49 @@ struct ScanView: View {
                 parsed = nil
                 showingPaste = false
             }
+            .safeAreaInset(edge: .top) {
+                topOverlay
+                    .background(
+                        GeometryReader { g in
+                            Color.clear.preference(key: TopOverlayHeightKey.self, value: g.size.height)
+                        }
+                    )
+                    .onPreferenceChange(TopOverlayHeightKey.self) { topOverlayHeight = $0 }
+                    .padding(.top, -topOverlayLift)
+            }
+            .safeAreaInset(edge: .bottom) {
+                bottomOverlay
+                    .background(
+                        GeometryReader { g in
+                            Color.clear.preference(key: BottomOverlayHeightKey.self, value: g.size.height)
+                        }
+                    )
+                    .onPreferenceChange(BottomOverlayHeightKey.self) { bottomOverlayHeight = $0 }
+            }
         }
     }
 
     private var topOverlay: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Button {
-                    showingPhotoPicker = true
-                } label: {
-                    Label("Photo", systemImage: "photo.on.rectangle")
-                }
-                .buttonStyle(.bordered)
-
-                Spacer()
-
-                Button("Paste") { showingPaste = true }
-                    .buttonStyle(.borderedProminent)
+        HStack {
+            Button {
+                showingPhotoPicker = true
+            } label: {
+                Label("Photo", systemImage: "photo.on.rectangle")
             }
+            .buttonStyle(.bordered)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Does not auto‑open links.")
-                    .font(.headline)
-                Text("Scan → review → then open/copy/share.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
+            Spacer()
+
+            Button("Paste") { showingPaste = true }
+                .buttonStyle(.borderedProminent)
         }
         .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 12)
-        .background(.ultraThinMaterial)
-        .overlay(Divider(), alignment: .bottom)
+        .padding(.top, 0)
+        .padding(.bottom, 0)
     }
 
     private var bottomOverlay: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 20) {
             // Instruction chip (optional) pinned just above the tab bar.
             if lowLightHint && !isTorchOn {
                 Text("Low light — try the flashlight")
@@ -232,7 +252,7 @@ struct ScanView: View {
                 .font(.headline)
 
             if cameraAuth == .notDetermined {
-                Button("Allow Camera") {
+                Button("Continue") {
                     AVCaptureDevice.requestAccess(for: .video) { _ in
                         DispatchQueue.main.async {
                             cameraAuth = AVCaptureDevice.authorizationStatus(for: .video)

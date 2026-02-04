@@ -33,6 +33,12 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    NavigationLink("How to Use", destination: HowToUseView())
+                } header: {
+                    Text("Help")
+                }
+
+                Section {
                     HStack {
                         Text("App")
                         Spacer()
@@ -55,5 +61,73 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .background(Color(.systemBackground))
+    }
+}
+
+struct HowToUseView: View {
+    var body: some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Scan Codes", systemImage: "qrcode.viewfinder")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    
+                    Text("Point your camera at a QR code or barcode to scan it automatically. Ensure there is enough light and the code is clearly visible.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Import from Photos", systemImage: "photo.on.rectangle")
+                        .font(.headline)
+                         .foregroundStyle(.primary)
+                    
+                    Text("Have a code saved in your gallery? Tap the 'Photo' button on the scan screen to import it.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Paste Content", systemImage: "doc.on.clipboard")
+                        .font(.headline)
+                         .foregroundStyle(.primary)
+                    
+                    Text("You can paste text or access the clipboard directly to analyze potential codes or links.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text("How to Scan")
+            }
+            
+            Section {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Automatic History", systemImage: "clock.arrow.circlepath")
+                        .font(.headline)
+                         .foregroundStyle(.primary)
+                    
+                    Text("All your scans are saved to the History tab automatically, so you can find them later.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text("Features")
+            }
+            
+            Section {
+                Text("This app supports various formats including QR Code, Aztec, DataMatrix, PDF417, EAN-13, EAN-8, UPC-E, Code 39, and Code 128.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Supported Formats")
+            }
+        }
+        .navigationTitle("How to Use")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

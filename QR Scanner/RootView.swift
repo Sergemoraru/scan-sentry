@@ -19,6 +19,9 @@ struct RootView: View {
         UITabBar.appearance().isTranslucent = true
     }
 
+    @AppStorage("hasShownOnboarding") private var hasShownOnboarding: Bool = false
+    @State private var showOnboarding = false
+
     var body: some View {
         TabView {
             ScanView()
@@ -32,5 +35,17 @@ struct RootView: View {
         }
         // SwiftUI-level hint to hide tab bar background.
         .toolbarBackground(.hidden, for: .tabBar)
+        .sheet(isPresented: $showOnboarding, onDismiss: {
+            hasShownOnboarding = true
+        }) {
+            OnboardingView(isPresented: $showOnboarding)
+                .interactiveDismissDisabled()
+        }
+        .onAppear {
+            if !hasShownOnboarding {
+                showOnboarding = true
+            }
+        }
     }
 }
+
