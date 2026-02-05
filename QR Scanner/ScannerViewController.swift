@@ -2,6 +2,12 @@ import UIKit
 import AVFoundation
 
 final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
+    // Auto-zoom helps scanning small/close codes without pinching.
+    var autoZoomEnabled: Bool = true
+
+    private var lastManualZoomAt: CFTimeInterval = 0
+    private var lastAutoZoomAt: CFTimeInterval = 0
+    private var autoZoomFactor: CGFloat = 1.0
     var onScan: ((String, String?) -> Void)?
     var onLowLightChanged: ((Bool) -> Void)?
 
@@ -210,7 +216,8 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
 
     @objc private func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
         guard let device = AVCaptureDevice.default(for: .video) else { return }
-        if recognizer.state == .changed {
+        if recognizer.state == .began || recognizer.state == .changed {
+            lastManualZoomAt = CACurrentMediaTime()
             do {
                 try device.lockForConfiguration()
                 let maxFactor = device.activeFormat.videoMaxZoomFactor
@@ -284,31 +291,72 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
     func metadataOutput(_ output: AVCaptureMetadataOutput,
                         didOutput metadataObjects: [AVMetadataObject],
                         from connection: AVCaptureConnection) {
-        // Draw bounding box for the first detected code
         overlayLayer.path = nil
-        if let obj = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
-           let transformed = previewLayer?.transformedMetadataObject(for: obj) as? AVMetadataMachineReadableCodeObject {
-            let path = UIBezierPath()
-            let corners = transformed.corners
-            if corners.count > 0 {
-                path.move(to: corners[0])
-                for p in corners.dropFirst() { path.addLine(to: p) }
-                path.close()
-                overlayLayer.path = path.cgPath
-            } else {
-                overlayLayer.path = UIBezierPath(rect: transformed.bounds).cgPath
-            }
 
-            // Let SwiftUI control pausing/resuming scanning (cooldown handled there).
+        guard let obj = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
+              let transformed = previewLayer?.transformedMetadataObject(for: obj) as? AVMetadataMachineReadableCodeObject else {
+            return
+        }
 
-            // Haptic feedback on successful scan
-            let generator = UINotificationFeedbackGenerator()
-            generator.notificationOccurred(.success)
+        // Auto-zoom based on apparent code size on screen.
+        if autoZoomEnabled {
+            updateAutoZoom(for: transformed.bounds)
+        }
 
-            let symbology = obj.type.rawValue
-            if let value = obj.stringValue {
-                onScan?(value, symbology)
-            }
+        // Draw bounding box for the first detected code
+        let path = UIBezierPath()
+        let corners = transformed.corners
+        if corners.count > 0 {
+            path.move(to: corners[0])
+            for p in corners.dropFirst() { path.addLine(to: p) }
+            path.close()
+            overlayLayer.path = path.cgPath
+        } else {
+            overlayLayer.path = UIBezierPath(rect: transformed.bounds).cgPath
+        }
+
+        // Haptic feedback on successful scan
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+
+        let symbology = obj.type.rawValue
+        if let value = obj.stringValue {
+            onScan?(value, symbology)
+        }
+    }
+
+    private func updateAutoZoom(for codeBounds: CGRect) {
+        // Don’t fight the user: wait a moment after manual pinch.
+        let now = CACurrentMediaTime()
+        if now - lastManualZoomAt < 1.5 { return }
+        if now - lastAutoZoomAt < 0.15 { return }
+        lastAutoZoomAt = now
+
+        guard let device = AVCaptureDevice.default(for: .video) else { return }
+
+        // Aim for the code to occupy ~22% of the view area.
+        let viewArea = max(1, view.bounds.width * view.bounds.height)
+        let codeArea = max(1, codeBounds.width * codeBounds.height)
+        let currentRatio = codeArea / viewArea
+        let targetRatio: CGFloat = 0.22
+
+        // scale > 1 means zoom in.
+        var desired = device.videoZoomFactor * CGFloat(sqrt(targetRatio / currentRatio))
+
+        // Smooth changes and clamp.
+        let maxFactor = min(device.activeFormat.videoMaxZoomFactor, 6.0)
+        desired = max(1.0, min(maxFactor, desired))
+
+        // Low-pass filter to avoid jitter.
+        let alpha: CGFloat = 0.18
+        autoZoomFactor = autoZoomFactor + alpha * (desired - autoZoomFactor)
+
+        do {
+            try device.lockForConfiguration()
+            device.videoZoomFactor = autoZoomFactor
+            device.unlockForConfiguration()
+        } catch {
+            // Ignore zoom errors
         }
     }
 }

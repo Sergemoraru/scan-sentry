@@ -91,7 +91,7 @@ struct ScanView: View {
                     )
 
                     if cameraAuth == .authorized {
-                        // Camera preview clipped to the scan box only
+                        // Full-bleed camera preview behind the scan UI.
                         CameraScannerView(
                             isScanning: $isScanning,
                             isTorchOn: $isTorchOn,
@@ -101,9 +101,21 @@ struct ScanView: View {
                         } onLowLightChanged: { isLow in
                             lowLightHint = isLow
                         }
-                        .frame(width: boxRect.width, height: boxRect.height)
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
-                        .position(x: boxRect.midX, y: boxRect.midY)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color.black)
+                        .ignoresSafeArea()
+
+                        // Dim everything outside the scan box.
+                        Color.black.opacity(0.35)
+                            .mask(
+                                Canvas { context, _ in
+                                    context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.white))
+                                    let rounded = Path(roundedRect: boxRect, cornerRadius: 20)
+                                    context.blendMode = .destinationOut
+                                    context.fill(rounded, with: .color(.black))
+                                }
+                            )
+                            .allowsHitTesting(false)
 
                         // Scan frame overlay.
                         RoundedRectangle(cornerRadius: 20)
@@ -112,12 +124,6 @@ struct ScanView: View {
                             .frame(width: boxRect.width, height: boxRect.height)
                             .position(x: boxRect.midX, y: boxRect.midY)
                             .allowsHitTesting(false)
-
-                        // Top overlay pinned to top safe area.
-                        // REMOVED per instructions
-
-                        // Bottom overlay pinned above the tab bar.
-                        // REMOVED per instructions
                     } else {
                         permissionUI
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
