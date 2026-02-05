@@ -142,11 +142,17 @@ struct ScanView: View {
                     .presentationDetents([.medium, .large])
             }
             .sheet(isPresented: $showingPaste) {
-                PasteSheet(pasteText: $pasteText) { pasteText in
-                    showingPaste = false
-                    let parsed = ScanParser.parse(pasteText)
-                    self.parsed = parsed
-                }
+                PasteSheet(
+                    pasteText: $pasteText,
+                    onUse: { pasteText in
+                        showingPaste = false
+                        let parsed = ScanParser.parse(pasteText)
+                        self.parsed = parsed
+                    },
+                    onClose: {
+                        showingPaste = false
+                    }
+                )
             }
             .photosPicker(isPresented: $showingPhotoPicker, selection: $selectedPhoto, matching: .images)
             .sheet(isPresented: $showingPaywall, onDismiss: {
