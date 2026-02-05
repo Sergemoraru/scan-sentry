@@ -51,8 +51,14 @@ struct PaywallView: View {
                         }
                         .padding(.vertical)
                     } else {
-                        ProgressView()
-                            .padding()
+                        VStack(spacing: 10) {
+                            ProgressView()
+                            Button("Try Again") {
+                                Task { await subscriptionManager.loadProducts() }
+                            }
+                            .font(.subheadline)
+                        }
+                        .padding()
                     }
                     
                     // Error message
@@ -103,12 +109,29 @@ struct PaywallView: View {
                     }
                     .padding(.horizontal)
                     
+                    // Subscription disclosure (helps App Review)
+                    VStack(spacing: 6) {
+                        Text("Auto‑renewable subscription. Cancel anytime in Settings.")
+                        if let product = subscriptionManager.products.first {
+                            Text("Payment will be charged to your Apple ID account. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period. Your account will be charged for renewal within 24 hours prior to the end of the current period at the rate of \(product.displayPrice) per month.")
+                        } else {
+                            Text("Payment will be charged to your Apple ID account. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period.")
+                        }
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+
                     // Legal links
                     HStack(spacing: 16) {
                         Link("Terms of Use", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
                         Text("•")
                             .foregroundStyle(.tertiary)
-                        Link("Privacy Policy", destination: URL(string: "https://www.apple.com/privacy/")!)
+                        Link("Privacy Policy", destination: URL(string: "https://raw.githubusercontent.com/Sergemoraru/scan-sentry/main/privacy-policy.md")!)
+                        Text("•")
+                            .foregroundStyle(.tertiary)
+                        Link("Support", destination: URL(string: "https://raw.githubusercontent.com/Sergemoraru/scan-sentry/main/support.md")!)
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
