@@ -17,6 +17,8 @@ struct QRCodeGeneratorView: View {
     @Environment(SubscriptionManager.self) private var subscriptionManager
     @Environment(\.openURL) private var openURL
 
+    @FocusState private var isTextFocused: Bool
+
     @State private var text: String = "https://"
     @State private var showingPaywall = false
 
@@ -34,8 +36,12 @@ struct QRCodeGeneratorView: View {
             Form {
                 Section("Content") {
                     TextField("Text or URL", text: $text, axis: .vertical)
+                        .focused($isTextFocused)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
+                        .keyboardType(.URL)
+                        .submitLabel(.done)
+                        .onSubmit { isTextFocused = false }
                 }
 
                 Section("Preview") {
@@ -75,6 +81,13 @@ struct QRCodeGeneratorView: View {
             }
             .navigationTitle("Create")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { isTextFocused = false }
+                }
+            }
+            .onTapGesture { isTextFocused = false }
             .sheet(isPresented: $showingPaywall) {
                 PaywallView()
             }
