@@ -1,13 +1,30 @@
 import SwiftUI
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import Photos
+import UIKit
 
-/// Create/preview QR codes. Export actions can be paywalled by the caller.
+private struct ActivityView: UIViewControllerRepresentable {
+    let items: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
+}
+
+/// Create/preview QR codes. Export actions are paywalled (Option B: preview free, export paid).
 struct QRCodeGeneratorView: View {
     @Environment(SubscriptionManager.self) private var subscriptionManager
+    @Environment(\.openURL) private var openURL
 
     @State private var text: String = "https://"
     @State private var showingPaywall = false
+
+    @State private var shareItems: [Any] = []
+    @State private var showingShare = false
+
+    @State private var alertTitle: String?
+    @State private var alertMessage: String?
 
     private let context = CIContext()
     private let filter = CIFilter.qrCodeGenerator()
@@ -22,23 +39,33 @@ struct QRCodeGeneratorView: View {
                 }
 
                 Section("Preview") {
-                    qrImage
-                        .interpolation(.none)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
+                    if let ui = makeUIImage(from: text) {
+                        Image(uiImage: ui)
+                            .interpolation(.none)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                    } else {
+                        Image(systemName: "qrcode")
+                            .resizable()
+                            .scaledToFit()
+                            .foregroundStyle(.secondary)
+                            .frame(height: 180)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                    }
                 }
 
                 Section {
                     Button {
-                        exportTapped(kind: .share)
+                        Task { await exportTapped(kind: .share) }
                     } label: {
                         Label("Share QR Code", systemImage: "square.and.arrow.up")
                     }
 
                     Button {
-                        exportTapped(kind: .save)
+                        Task { await exportTapped(kind: .save) }
                     } label: {
                         Label("Save to Photos", systemImage: "square.and.arrow.down")
                     }
@@ -51,6 +78,23 @@ struct QRCodeGeneratorView: View {
             .sheet(isPresented: $showingPaywall) {
                 PaywallView()
             }
+            .sheet(isPresented: $showingShare) {
+                ActivityView(items: shareItems)
+            }
+            .alert(alertTitle ?? "", isPresented: .init(get: { alertTitle != nil }, set: { if !$0 { alertTitle = nil; alertMessage = nil } })) {
+                if alertTitle == "Photos Permission" {
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            openURL(url)
+                        }
+                    }
+                    Button("OK", role: .cancel) {}
+                } else {
+                    Button("OK", role: .cancel) {}
+                }
+            } message: {
+                Text(alertMessage ?? "")
+            }
         }
     }
 
@@ -59,30 +103,59 @@ struct QRCodeGeneratorView: View {
         case save
     }
 
-    private func exportTapped(kind: ExportKind) {
+    private func exportTapped(kind: ExportKind) async {
         guard subscriptionManager.isPro else {
             showingPaywall = true
             return
         }
-        // Placeholder: we’ll wire up actual share/save next (UIActivityViewController / Photos).
-        // For now, just show paywall gating works.
-        if kind == .save {
-            // no-op
+        guard let ui = makeUIImage(from: text) else {
+            alertTitle = "Error"
+            alertMessage = "Couldn’t generate a QR code from that text."
+            return
+        }
+
+        switch kind {
+        case .share:
+            shareItems = [ui]
+            showingShare = true
+
+        case .save:
+            await saveToPhotos(ui)
         }
     }
 
-    @ViewBuilder
-    private var qrImage: Image {
-        if let ui = makeUIImage(from: text) {
-            Image(uiImage: ui)
-        } else {
-            Image(systemName: "qrcode")
-                .resizable()
-                .scaledToFit()
-                .foregroundStyle(.secondary)
-                .frame(height: 180)
+    private func saveToPhotos(_ image: UIImage) async {
+        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+        let granted: Bool
+        switch status {
+        case .authorized, .limited:
+            granted = true
+        case .notDetermined:
+            let newStatus = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+            granted = (newStatus == .authorized || newStatus == .limited)
+        default:
+            granted = false
+        }
+
+        guard granted else {
+            alertTitle = "Photos Permission"
+            alertMessage = "Allow Photos access to save QR codes.\n\nSettings → Privacy & Security → Photos → Scan Sentry"
+            return
+        }
+
+        do {
+            try await PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.creationRequestForAsset(from: image)
+            }
+            alertTitle = "Saved"
+            alertMessage = "QR code saved to Photos."
+        } catch {
+            alertTitle = "Error"
+            alertMessage = "Couldn’t save to Photos: \(error.localizedDescription)"
         }
     }
+
+    // Preview image is rendered inline in the Form.
 
     private func makeUIImage(from string: String) -> UIImage? {
         let data = Data(string.utf8)
