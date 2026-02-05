@@ -33,6 +33,9 @@ struct RootView: View {
             HistoryView()
                 .tabItem { Label("History", systemImage: "clock") }
 
+            QRCodeGeneratorView()
+                .tabItem { Label("Create", systemImage: "qrcode") }
+
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gear") }
         }
