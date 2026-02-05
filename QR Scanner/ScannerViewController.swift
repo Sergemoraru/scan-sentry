@@ -81,6 +81,10 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
     }
 
     func startScanning() {
+        // If we haven't configured yet (common on first launch), try now.
+        if !configured {
+            checkPermissionAndConfigureIfNeeded()
+        }
         guard configured, !isRunning else { return }
         isRunning = true
         DispatchQueue.main.async { self.overlayLayer.path = nil }
