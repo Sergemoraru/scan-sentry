@@ -35,13 +35,21 @@ struct QRCodeGeneratorView: View {
         NavigationStack {
             Form {
                 Section("Content") {
-                    TextField("Text or URL", text: $text, axis: .vertical)
-                        .focused($isTextFocused)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled(true)
-                        .keyboardType(.URL)
-                        .submitLabel(.done)
-                        .onSubmit { isTextFocused = false }
+                    VStack(alignment: .leading, spacing: 10) {
+                        TextField("Text or URL", text: $text, axis: .vertical)
+                            .focused($isTextFocused)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled(true)
+                            .keyboardType(.URL)
+                            .submitLabel(.done)
+                            .onSubmit { isTextFocused = false }
+
+                        HStack {
+                            Spacer()
+                            Button("Done") { isTextFocused = false }
+                                .buttonStyle(.bordered)
+                        }
+                    }
                 }
 
                 Section("Preview") {
