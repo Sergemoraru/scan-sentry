@@ -75,12 +75,16 @@ struct QRCodeGeneratorView: View {
                         Task { await exportTapped(kind: .share) }
                     } label: {
                         Label("Share QR Code", systemImage: "square.and.arrow.up")
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
 
                     Button {
                         Task { await exportTapped(kind: .save) }
                     } label: {
                         Label("Save to Photos", systemImage: "square.and.arrow.down")
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
                 } footer: {
                     if !subscriptionManager.isPro {
@@ -100,7 +104,9 @@ struct QRCodeGeneratorView: View {
                     Button("Done") { isTextFocused = false }
                 }
             }
-            .onTapGesture { isTextFocused = false }
+            .simultaneousGesture(TapGesture().onEnded {
+                isTextFocused = false
+            })
             .sheet(item: $activeSheet) { sheet in
                 switch sheet {
                 case .paywall:
