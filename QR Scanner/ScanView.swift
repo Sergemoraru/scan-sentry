@@ -211,6 +211,11 @@ struct ScanView: View {
     private var topOverlay: some View {
         HStack {
             Button {
+                guard subscriptionManager.canScan else {
+                    isScanning = false
+                    showingPaywall = true
+                    return
+                }
                 showingPhotoPicker = true
             } label: {
                 Label("Photo", systemImage: "photo.on.rectangle")
@@ -219,7 +224,14 @@ struct ScanView: View {
 
             Spacer()
 
-            Button("Paste") { showingPaste = true }
+            Button("Paste") {
+                guard subscriptionManager.canScan else {
+                    isScanning = false
+                    showingPaywall = true
+                    return
+                }
+                showingPaste = true
+            }
                 .buttonStyle(.borderedProminent)
         }
         .padding(.horizontal, 16)

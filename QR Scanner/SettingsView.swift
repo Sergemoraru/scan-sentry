@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(SubscriptionManager.self) private var subscriptionManager
     @AppStorage("saveToHistory") private var saveToHistory: Bool = true
     @AppStorage("confirmBeforeOpen") private var confirmBeforeOpen: Bool = true
     @AppStorage("aggressiveRiskAnalysis") private var aggressiveRiskAnalysis: Bool = true
@@ -22,6 +23,56 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    HStack {
+                        Text("Plan")
+                        Spacer()
+                        Text(subscriptionManager.isPro ? "Pro" : "Free")
+                            .fontWeight(.semibold)
+                            .foregroundStyle(subscriptionManager.isPro ? .green : .secondary)
+                    }
+
+                    if subscriptionManager.isPro {
+                        HStack {
+                            Text("Premium Access")
+                            Spacer()
+                            Text("Unlimited")
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        HStack {
+                            Text("QR Scans Left")
+                            Spacer()
+                            Text("\(subscriptionManager.remainingScans)")
+                                .foregroundStyle(.secondary)
+                        }
+                        HStack {
+                            Text("Document Scans Left")
+                            Spacer()
+                            Text("\(subscriptionManager.remainingDocuments)")
+                                .foregroundStyle(.secondary)
+                        }
+                        HStack {
+                            Text("QR Exports Left")
+                            Spacer()
+                            Text("\(subscriptionManager.remainingQRCodeExports)")
+                                .foregroundStyle(.secondary)
+                        }
+                        HStack {
+                            Text("PDF Exports Left")
+                            Spacer()
+                            Text("\(subscriptionManager.remainingPDFExports)")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Membership")
+                } footer: {
+                    if !subscriptionManager.isPro {
+                        Text("Each premium feature includes one free try before Pro is required.")
+                    }
+                }
+
                 Section {
                     Toggle("Save scans to History", isOn: $saveToHistory)
                     Toggle("Confirm before opening links", isOn: $confirmBeforeOpen)
