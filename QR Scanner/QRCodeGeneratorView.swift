@@ -20,10 +20,9 @@ struct QRCodeGeneratorView: View {
     @FocusState private var isTextFocused: Bool
 
     @State private var text: String = "https://"
-    @State private var showingPaywall = false
 
     @State private var shareItems: [Any] = []
-    @State private var showingShare = false
+    @State private var activeSheet: ActiveSheet?
 
     @State private var alertTitle: String?
     @State private var alertMessage: String?
@@ -102,11 +101,13 @@ struct QRCodeGeneratorView: View {
                 }
             }
             .onTapGesture { isTextFocused = false }
-            .sheet(isPresented: $showingPaywall) {
-                PaywallView()
-            }
-            .sheet(isPresented: $showingShare) {
-                ActivityView(items: shareItems)
+            .sheet(item: $activeSheet) { sheet in
+                switch sheet {
+                case .paywall:
+                    PaywallView()
+                case .share:
+                    ActivityView(items: shareItems)
+                }
             }
             .alert(alertTitle ?? "", isPresented: .init(get: { alertTitle != nil }, set: { if !$0 { alertTitle = nil; alertMessage = nil } })) {
                 if alertTitle == "Photos Permission" {
@@ -130,9 +131,23 @@ struct QRCodeGeneratorView: View {
         case save
     }
 
+    private enum ActiveSheet: Identifiable {
+        case paywall
+        case share
+
+        var id: String {
+            switch self {
+            case .paywall:
+                return "paywall"
+            case .share:
+                return "share"
+            }
+        }
+    }
+
     private func exportTapped(kind: ExportKind) async {
         guard subscriptionManager.canExportQRCode else {
-            showingPaywall = true
+            activeSheet = .paywall
             return
         }
         guard let ui = makeUIImage(from: text) else {
@@ -144,7 +159,7 @@ struct QRCodeGeneratorView: View {
         switch kind {
         case .share:
             shareItems = [ui]
-            showingShare = true
+            activeSheet = .share
             subscriptionManager.consumeFreeUse(for: .qrExport)
 
         case .save:

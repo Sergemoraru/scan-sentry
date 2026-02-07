@@ -63,6 +63,8 @@ struct ScanView: View {
     @State private var topOverlayHeight: CGFloat = 0
     @State private var bottomOverlayHeight: CGFloat = 0
     @State private var topOverlayLift: CGFloat = 32
+
+    private let scannerResetDelay: TimeInterval = 1.5
  
     var body: some View {
         NavigationStack {
@@ -132,8 +134,7 @@ struct ScanView: View {
                 .ignoresSafeArea() // do not let GeometryReader be constrained by the tab bar
             }
             .sheet(item: $parsed, onDismiss: {
-                let cooldown: TimeInterval = 2.0
-                DispatchQueue.main.asyncAfter(deadline: .now() + cooldown) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + scannerResetDelay) {
                     isScanning = true
                 }
                 self.parsed = nil
@@ -323,7 +324,7 @@ struct ScanView: View {
         if let last = lastScanValue,
            let at = lastScanAt,
            last == trimmed,
-           Date().timeIntervalSince(at) < 3.0 {
+           Date().timeIntervalSince(at) < scannerResetDelay {
             isScanning = true
             return
         }
