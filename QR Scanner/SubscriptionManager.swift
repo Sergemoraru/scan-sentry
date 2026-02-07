@@ -2,14 +2,20 @@ import Foundation
 import StoreKit
 import SwiftUI
 
+enum PremiumFeature: String, CaseIterable {
+    case scan
+    case documentScan
+    case qrExport
+    case pdfExport
+}
+
 @Observable
 final class SubscriptionManager {
     // MARK: - Product IDs
     static let proMonthlyProductID = "com.safeqr.pro.monthly"
     
     // MARK: - Usage Limits
-    static let freeScanLimit = 3
-    static let freeDocumentLimit = 1
+    static let freeUsageLimitPerFeature = 1
     
     // MARK: - Persisted State
     @ObservationIgnored
@@ -17,6 +23,12 @@ final class SubscriptionManager {
     
     @ObservationIgnored
     @AppStorage("documentCount") private var storedDocumentCount: Int = 0
+
+    @ObservationIgnored
+    @AppStorage("qrExportCount") private var storedQRCodeExportCount: Int = 0
+
+    @ObservationIgnored
+    @AppStorage("pdfExportCount") private var storedPDFExportCount: Int = 0
     
     // MARK: - Published State
     var isPro: Bool = false
@@ -24,30 +36,77 @@ final class SubscriptionManager {
     var purchaseInProgress: Bool = false
     var errorMessage: String?
     
-    var scanCount: Int {
-        get { storedScanCount }
-        set { storedScanCount = newValue }
-    }
-    
-    var documentCount: Int {
-        get { storedDocumentCount }
-        set { storedDocumentCount = newValue }
-    }
-    
     var canScan: Bool {
-        isPro || scanCount < Self.freeScanLimit
+        canUse(.scan)
     }
     
     var canScanDocument: Bool {
-        isPro || documentCount < Self.freeDocumentLimit
+        canUse(.documentScan)
+    }
+
+    var canExportQRCode: Bool {
+        canUse(.qrExport)
+    }
+
+    var canExportPDF: Bool {
+        canUse(.pdfExport)
     }
     
     var remainingScans: Int {
-        max(0, Self.freeScanLimit - scanCount)
+        remainingFreeUses(for: .scan)
     }
     
     var remainingDocuments: Int {
-        max(0, Self.freeDocumentLimit - documentCount)
+        remainingFreeUses(for: .documentScan)
+    }
+
+    var remainingQRCodeExports: Int {
+        remainingFreeUses(for: .qrExport)
+    }
+
+    var remainingPDFExports: Int {
+        remainingFreeUses(for: .pdfExport)
+    }
+
+    func canUse(_ feature: PremiumFeature) -> Bool {
+        isPro || usageCount(for: feature) < Self.freeUsageLimitPerFeature
+    }
+
+    func consumeFreeUse(for feature: PremiumFeature) {
+        guard !isPro else { return }
+        let current = usageCount(for: feature)
+        let updated = min(Self.freeUsageLimitPerFeature, current + 1)
+        setUsageCount(updated, for: feature)
+    }
+
+    private func remainingFreeUses(for feature: PremiumFeature) -> Int {
+        max(0, Self.freeUsageLimitPerFeature - usageCount(for: feature))
+    }
+
+    private func usageCount(for feature: PremiumFeature) -> Int {
+        switch feature {
+        case .scan:
+            return storedScanCount
+        case .documentScan:
+            return storedDocumentCount
+        case .qrExport:
+            return storedQRCodeExportCount
+        case .pdfExport:
+            return storedPDFExportCount
+        }
+    }
+
+    private func setUsageCount(_ value: Int, for feature: PremiumFeature) {
+        switch feature {
+        case .scan:
+            storedScanCount = value
+        case .documentScan:
+            storedDocumentCount = value
+        case .qrExport:
+            storedQRCodeExportCount = value
+        case .pdfExport:
+            storedPDFExportCount = value
+        }
     }
     
     // MARK: - Transaction Listener

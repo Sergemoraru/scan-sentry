@@ -12,7 +12,7 @@ private struct ActivityView: UIViewControllerRepresentable {
     func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
 }
 
-/// Create/preview QR codes. Export actions are paywalled (Option B: preview free, export paid).
+/// Create/preview QR codes. Export actions include one free try, then require Pro.
 struct QRCodeGeneratorView: View {
     @Environment(SubscriptionManager.self) private var subscriptionManager
     @Environment(\.openURL) private var openURL
@@ -84,7 +84,13 @@ struct QRCodeGeneratorView: View {
                         Label("Save to Photos", systemImage: "square.and.arrow.down")
                     }
                 } footer: {
-                    Text(subscriptionManager.isPro ? "" : "Exporting QR codes requires Pro.")
+                    if !subscriptionManager.isPro {
+                        if subscriptionManager.remainingQRCodeExports > 0 {
+                            Text("You get one free QR export before Pro is required.")
+                        } else {
+                            Text("Your free QR export has been used. Upgrade to Pro for unlimited exports.")
+                        }
+                    }
                 }
             }
             .navigationTitle("Create")
@@ -125,7 +131,7 @@ struct QRCodeGeneratorView: View {
     }
 
     private func exportTapped(kind: ExportKind) async {
-        guard subscriptionManager.isPro else {
+        guard subscriptionManager.canExportQRCode else {
             showingPaywall = true
             return
         }
@@ -139,13 +145,17 @@ struct QRCodeGeneratorView: View {
         case .share:
             shareItems = [ui]
             showingShare = true
+            subscriptionManager.consumeFreeUse(for: .qrExport)
 
         case .save:
-            await saveToPhotos(ui)
+            let didSave = await saveToPhotos(ui)
+            if didSave {
+                subscriptionManager.consumeFreeUse(for: .qrExport)
+            }
         }
     }
 
-    private func saveToPhotos(_ image: UIImage) async {
+    private func saveToPhotos(_ image: UIImage) async -> Bool {
         let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
         let granted: Bool
         switch status {
@@ -161,7 +171,7 @@ struct QRCodeGeneratorView: View {
         guard granted else {
             alertTitle = "Photos Permission"
             alertMessage = "Allow Photos access to save QR codes.\n\nSettings → Privacy & Security → Photos → Scan Sentry"
-            return
+            return false
         }
 
         do {
@@ -170,9 +180,11 @@ struct QRCodeGeneratorView: View {
             }
             alertTitle = "Saved"
             alertMessage = "QR code saved to Photos."
+            return true
         } catch {
             alertTitle = "Error"
             alertMessage = "Couldn’t save to Photos: \(error.localizedDescription)"
+            return false
         }
     }
 

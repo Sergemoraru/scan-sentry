@@ -3,10 +3,12 @@ import PDFKit
 
 struct DocumentDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(SubscriptionManager.self) private var subscriptionManager
     let document: DocumentRecord
     
     @State private var currentPage = 0
     @State private var showingShareSheet = false
+    @State private var showingPaywall = false
     @State private var pdfURL: URL?
     
     private var images: [UIImage] {
@@ -50,7 +52,15 @@ struct DocumentDetailView: View {
                 
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        generateAndSharePDF()
+                        guard subscriptionManager.canExportPDF else {
+                            showingPaywall = true
+                            return
+                        }
+
+                        let didGenerate = generateAndSharePDF()
+                        if didGenerate {
+                            subscriptionManager.consumeFreeUse(for: .pdfExport)
+                        }
                     } label: {
                         Image(systemName: "square.and.arrow.up")
                     }
@@ -61,11 +71,14 @@ struct DocumentDetailView: View {
                     ShareSheet(items: [url])
                 }
             }
+            .sheet(isPresented: $showingPaywall) {
+                PaywallView()
+            }
         }
     }
     
-    private func generateAndSharePDF() {
-        guard !images.isEmpty else { return }
+    private func generateAndSharePDF() -> Bool {
+        guard !images.isEmpty else { return false }
         
         let pdfDocument = PDFDocument()
         
@@ -79,9 +92,10 @@ struct DocumentDetailView: View {
         let fileName = document.title.replacingOccurrences(of: " ", with: "_") + ".pdf"
         let fileURL = tempDir.appendingPathComponent(fileName)
         
-        pdfDocument.write(to: fileURL)
+        guard pdfDocument.write(to: fileURL) else { return false }
         pdfURL = fileURL
         showingShareSheet = true
+        return true
     }
 }
 

@@ -22,20 +22,35 @@ struct PaywallView: View {
                         Text("Upgrade to Pro")
                             .font(.largeTitle.bold())
                         
-                        Text("Unlock unlimited scanning")
+                        Text("Try every premium feature once, then unlock unlimited access")
                             .font(.title3)
                             .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
                     }
                     .padding(.top, 20)
                     
                     // Benefits
                     VStack(alignment: .leading, spacing: 16) {
-                        BenefitRow(icon: "qrcode.viewfinder", title: "Unlimited QR Scans", subtitle: "Scan as many codes as you need")
-                        BenefitRow(icon: "doc.text.viewfinder", title: "Unlimited Documents", subtitle: "Scan and save unlimited documents")
-                        BenefitRow(icon: "square.and.arrow.up", title: "PDF Export", subtitle: "Export documents as high-quality PDFs")
-                        BenefitRow(icon: "clock.arrow.circlepath", title: "Full History", subtitle: "Access your complete scan history")
+                        BenefitRow(icon: "qrcode.viewfinder", title: "Unlimited QR Scans", subtitle: "One free scan included, then unlimited with Pro")
+                        BenefitRow(icon: "doc.text.viewfinder", title: "Unlimited Document Scans", subtitle: "One free document scan included")
+                        BenefitRow(icon: "square.and.arrow.up", title: "Unlimited QR Exports", subtitle: "One free QR export included")
+                        BenefitRow(icon: "doc.richtext", title: "Unlimited PDF Exports", subtitle: "One free PDF export included")
                     }
                     .padding(.horizontal)
+
+                    if !subscriptionManager.isPro {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Free tries remaining")
+                                .font(.subheadline.weight(.semibold))
+                            Text("QR scan: \(subscriptionManager.remainingScans)")
+                            Text("Document scan: \(subscriptionManager.remainingDocuments)")
+                            Text("QR export: \(subscriptionManager.remainingQRCodeExports)")
+                            Text("PDF export: \(subscriptionManager.remainingPDFExports)")
+                        }
+                        .font(.caption)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+                    }
                     
                     Spacer(minLength: 20)
                     

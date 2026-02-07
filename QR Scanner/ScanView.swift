@@ -336,8 +336,8 @@ struct ScanView: View {
         let parsed = ScanParser.parse(trimmed)
         self.parsed = parsed
 
-        // Increment scan count
-        subscriptionManager.scanCount += 1
+        // Consume the one-time free scan for non-Pro users.
+        subscriptionManager.consumeFreeUse(for: .scan)
 
         if saveToHistory {
             let record = ScanRecord(rawValue: parsed.raw, kindRaw: parsed.kind.rawValue, symbology: symbology)

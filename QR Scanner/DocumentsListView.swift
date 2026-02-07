@@ -136,8 +136,8 @@ struct DocumentsListView: View {
         let record = DocumentRecord(title: title, pageImagePaths: pagePaths)
         modelContext.insert(record)
 
-        // Increment document count
-        subscriptionManager.documentCount += 1
+        // Consume the one-time free document scan for non-Pro users.
+        subscriptionManager.consumeFreeUse(for: .documentScan)
     }
     
     private func deleteDocuments(at offsets: IndexSet) {
