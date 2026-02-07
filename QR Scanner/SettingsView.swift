@@ -73,6 +73,22 @@ struct SettingsView: View {
                     }
                 }
 
+#if DEBUG
+                Section {
+                    Toggle("Force Pro", isOn: Binding(
+                        get: { subscriptionManager.debugForcePro },
+                        set: { enabled in
+                            subscriptionManager.setDebugForcePro(enabled)
+                        }
+                    ))
+                    .tint(.orange)
+                } header: {
+                    Text("Debug")
+                } footer: {
+                    Text("Debug-only override for local testing. This does not affect App Store subscriptions.")
+                }
+#endif
+
                 Section {
                     Toggle("Save scans to History", isOn: $saveToHistory)
                     Toggle("Confirm before opening links", isOn: $confirmBeforeOpen)

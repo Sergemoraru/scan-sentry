@@ -29,12 +29,28 @@ final class SubscriptionManager {
 
     @ObservationIgnored
     @AppStorage("pdfExportCount") private var storedPDFExportCount: Int = 0
+
+#if DEBUG
+    @ObservationIgnored
+    @AppStorage("debugForcePro") private var storedDebugForcePro: Bool = false
+#endif
     
     // MARK: - Published State
-    var isPro: Bool = false
+    private var hasActiveSubscription: Bool = false
+#if DEBUG
+    var debugForcePro: Bool = false
+#endif
     var products: [Product] = []
     var purchaseInProgress: Bool = false
     var errorMessage: String?
+
+    var isPro: Bool {
+#if DEBUG
+        hasActiveSubscription || debugForcePro
+#else
+        hasActiveSubscription
+#endif
+    }
     
     var canScan: Bool {
         canUse(.scan)
@@ -113,6 +129,9 @@ final class SubscriptionManager {
     private var transactionListener: Task<Void, Never>?
     
     init() {
+#if DEBUG
+        debugForcePro = storedDebugForcePro
+#endif
         transactionListener = listenForTransactions()
         Task {
             await loadProducts()
@@ -189,19 +208,27 @@ final class SubscriptionManager {
     // MARK: - Update Subscription Status
     @MainActor
     func updateSubscriptionStatus() async {
-        var hasActiveSubscription = false
+        var hasSubscription = false
         
         for await result in Transaction.currentEntitlements {
             if case .verified(let transaction) = result {
                 if transaction.productID == Self.proMonthlyProductID {
-                    hasActiveSubscription = true
+                    hasSubscription = true
                     break
                 }
             }
         }
         
-        isPro = hasActiveSubscription
+        hasActiveSubscription = hasSubscription
     }
+
+#if DEBUG
+    @MainActor
+    func setDebugForcePro(_ enabled: Bool) {
+        debugForcePro = enabled
+        storedDebugForcePro = enabled
+    }
+#endif
     
     // MARK: - Transaction Listener
     private func listenForTransactions() -> Task<Void, Never> {
